@@ -195,12 +195,3 @@ function showCustomerDetail(customer, pageContainer) {
   });
 }
 
-function createMovementChip(type) {
-  const colors = {
-    deposit: '#059669', sale_charge: '#F44336', refund: '#4CAF50',
-    adjustment: '#9A8F7E', purchase_expense: '#B5622A',
-  };
-  const color = colors[type] || '#6B7280';
-  const label = t(type) || type;
-  return `<span class="chip chip-sm" style="background:${color}20;color:${color};border-color:${color}40">${escHtml(label)}</span>`;
-}
