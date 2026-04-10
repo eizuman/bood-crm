@@ -1,27 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" width="220" height="60">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 174 52" width="174" height="52">
   <defs>
     <style>
-      .logo-text { font-family: 'Cormorant Garamond', Georgia, serif; }
-      .sub-text { font-family: 'Inter', Arial, sans-serif; }
+      .lt { font-family: 'Cormorant Garamond', Georgia, serif; }
+      .st { font-family: 'Inter', Arial, sans-serif; }
     </style>
   </defs>
-  <!-- Infinity symbol styled as two overlapping loops -->
-  <g transform="translate(10, 8)">
-    <!-- Left loop of infinity -->
-    <ellipse cx="16" cy="16" rx="12" ry="9" fill="none" stroke="#D4890A" stroke-width="2.5"/>
-    <!-- Right loop of infinity -->
-    <ellipse cx="36" cy="16" rx="12" ry="9" fill="none" stroke="#D4890A" stroke-width="2.5"/>
-    <!-- Center overlap mask -->
-    <rect x="22" y="7" width="8" height="18" fill="#1A1A1A"/>
-    <!-- Center crossover lines -->
-    <path d="M22 10 Q28 16 22 22" fill="none" stroke="#D4890A" stroke-width="2.5"/>
-    <path d="M36 10 Q30 16 36 22" fill="none" stroke="#D4890A" stroke-width="2.5"/>
-  </g>
-  <!-- M text before infinity, RZINKA after -->
-  <text x="58" y="30" class="logo-text" font-size="26" font-weight="700" fill="#F0EAD6" letter-spacing="2">M</text>
-  <text x="76" y="30" class="logo-text" font-size="26" font-weight="700" fill="#F0EAD6" letter-spacing="2">RZINKA</text>
+
+  <!-- B -->
+  <text x="1" y="38" class="lt" font-size="42" font-weight="600" fill="#F0EAD6">B</text>
+
+  <!-- Infinity symbol (green) — two ellipses with crossover mask -->
+  <!-- Left loop -->
+  <ellipse cx="44" cy="20" rx="14" ry="10.5" fill="none" stroke="#4CAF50" stroke-width="2.6"/>
+  <!-- Right loop -->
+  <ellipse cx="70" cy="20" rx="14" ry="10.5" fill="none" stroke="#4CAF50" stroke-width="2.6"/>
+  <!-- Crossover mask (bg colour so loops appear to cross) -->
+  <rect x="51" y="9" width="12" height="22" fill="#0F0F0F"/>
+  <!-- Left crossing arc (front stroke going ↘) -->
+  <path d="M 51 11.5 Q 57 20 51 28.5" fill="none" stroke="#4CAF50" stroke-width="2.6" stroke-linecap="round"/>
+  <!-- Right crossing arc (back stroke going ↙, slightly dimmer to suggest depth) -->
+  <path d="M 63 11.5 Q 57 20 63 28.5" fill="none" stroke="#4CAF50" stroke-width="2.6" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- D -->
+  <text x="86" y="38" class="lt" font-size="42" font-weight="600" fill="#F0EAD6">D</text>
+
   <!-- Subtitle -->
-  <text x="58" y="46" class="sub-text" font-size="9" font-weight="300" fill="#9A8F7E" letter-spacing="3">BREWING &amp; DISTILLING</text>
-  <!-- Decorative line -->
-  <line x1="58" y1="35" x2="210" y2="35" stroke="#D4890A" stroke-width="0.5" opacity="0.4"/>
+  <text x="1" y="50" class="st" font-size="7.5" font-weight="300" fill="#9A8F7E" letter-spacing="1.8">brewing and distilling</text>
 </svg>
