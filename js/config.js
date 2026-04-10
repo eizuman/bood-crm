@@ -20,7 +20,7 @@ export const SHEET_NAMES = {
 };
 
 export const SHEET_HEADERS = {
-  Components: ['id','name','brand','type','unit','cost_per_unit','ebc','alpha_acid','attenuation','spirit_type','notes','is_active','created_at','updated_at'],
+  Components: ['id','name','type','unit','cost_per_unit','ebc','alpha_acid','attenuation','spirit_type','notes','is_active','created_at','updated_at','brand'],
   Inventory: ['id','component_id','qty_delta','movement_type','ref_type','ref_id','unit_cost','notes','created_at'],
   Recipes: ['id','name','type','style','description','batch_size_l','fermenter_l','packaged_l','water_total_l','water_mash_l','water_sparge_l','hydromodule','boil_time_min','ferment_temp_c','ferment_days','og_target','fg_target','ibu_estimated','ebc_estimated','abv_estimated','estimated_cost','notes','manual_notes','is_active','created_at','updated_at'],
   RecipeIngredients: ['id','recipe_id','component_id','qty','stage_key','time_meta','sort_order','created_at'],
