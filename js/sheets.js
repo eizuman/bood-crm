@@ -123,9 +123,17 @@ export async function setSetting(key, value) {
   const existing = rows.find(r => r.key === key);
   const ts = now();
   if (existing) {
-    await updateRow(SHEET_NAMES.SETTINGS, existing.id, { key, value, updated_at: ts });
+    // Settings has no id column — write directly by row number
+    const headers = SHEET_HEADERS[SHEET_NAMES.SETTINGS];
+    const row = headers.map(h => ({ key, value, updated_at: ts })[h] ?? existing[h] ?? '');
+    const range = `${SHEET_NAMES.SETTINGS}!A${existing._row}:${colLetter(headers.length)}${existing._row}`;
+    await sheetsRequest(
+      `/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+      'PUT',
+      { values: [row] }
+    );
   } else {
-    await appendRow(SHEET_NAMES.SETTINGS, { id: genId(), key, value, updated_at: ts });
+    await appendRow(SHEET_NAMES.SETTINGS, { key, value, updated_at: ts });
   }
   invalidate(SHEET_NAMES.SETTINGS);
 }
@@ -180,9 +188,7 @@ export async function initializeSheets() {
   // Initialize default settings if Settings sheet was just created
   if (sheetsToCreate.includes('Settings')) {
     const ts = now();
-    const rows = Object.entries(DEFAULT_SETTINGS).map(([key, value]) => ({
-      id: genId(), key, value, updated_at: ts
-    }));
+    const rows = Object.entries(DEFAULT_SETTINGS).map(([key, value]) => ({ key, value, updated_at: ts }));
     await appendRows('Settings', rows);
   }
 
