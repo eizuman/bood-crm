@@ -66,7 +66,10 @@ function _render(container) {
   });
 
   const columns = [
-    { label: t('name'), key: 'name', render: r => `<strong>${escHtml(r.name)}</strong>` },
+    { label: t('name'), key: 'name', render: r => `
+      <strong>${escHtml(r.name)}</strong>
+      ${r.brand ? `<br><span class="text-muted text-sm">${escHtml(r.brand)}</span>` : ''}
+    `},
     { label: t('type'), key: 'type', render: r => createTypeChip(r.type) },
     { label: t('unit'), key: 'unit' },
     { label: t('cost_per_unit'), key: 'cost_per_unit', render: r => r.cost_per_unit ? `${parseFloat(r.cost_per_unit).toLocaleString('ru-RU')} ₽` : '—' },
@@ -138,6 +141,7 @@ function showComponentForm(comp, pageContainer) {
   const html = `
     <form id="component-form" class="form-grid">
       ${formField(t('name'), textInput('name', comp?.name || ''), '', true)}
+      ${formField('Производитель / Бренд', textInput('brand', comp?.brand || ''), 'Например: Курский, Castle Malting, Cargill, Hopsteiner')}
       ${formField(t('type'), selectInput('type', typeOpts, comp?.type || 'malt'), '', true)}
       ${formField(t('unit'), selectInput('unit', unitOpts, comp?.unit || 'кг'), '', true)}
       ${formField(t('cost_per_unit'), numberInput('cost_per_unit', comp?.cost_per_unit || ''))}

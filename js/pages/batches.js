@@ -1,6 +1,6 @@
 // Bood CRM — Batches Page (Beer & Distillation)
 import { getRows, appendRow, appendRows, updateRow, softDelete, genId, now, getSettings } from '../sheets.js';
-import { calcCOGS, calcABV, formatCurrency, escHtml, formatDate } from '../utils.js';
+import { calcCOGS, calcABV, calcOnHand, getEffectivePrice, formatCurrency, escHtml, formatDate } from '../utils.js';
 import { showModal, closeModal, showConfirm, showToast, showLoading, showError,
   renderTabs, renderTable, createStatusChip, createBatchTypeChip, pageHeader,
   formField, numberInput, textInput, selectInput, textareaInput, collectForm, kpiCard } from '../ui.js';
@@ -336,40 +336,13 @@ function renderPostingTab(container, batch, pageContainer, overlay) {
     </div>
   `;
 
-  // Post Brew
+  // Post Brew — show component selection dialog
   container.querySelector('#btn-post-brew')?.addEventListener('click', () => {
     if (brewPosted) return;
-    showConfirm(t('confirm_post'), 'Ингредиенты будут списаны со склада', async () => {
-      try {
-        const ts = now();
-        const inventoryRows = ingredients
-          .filter(i => ['mash','boil','whirlpool','fermentation','dry_hop','wash','distillation'].includes(i.stage_key))
-          .map(ing => {
-            const comp = components.find(c => c.id === ing.component_id);
-            return {
-              id: genId(),
-              component_id: ing.component_id,
-              qty_delta: String(-Math.abs(parseFloat(ing.qty) || 0)),
-              movement_type: isBeer ? 'brew_consume' : 'distill_consume',
-              ref_type: 'batch',
-              ref_id: batch.id,
-              unit_cost: comp?.cost_per_unit || '0',
-              notes: batch.name,
-              created_at: ts,
-            };
-          });
-
-        if (inventoryRows.length) await appendRows('Inventory', inventoryRows);
-
-        batch.brew_posted = 'TRUE';
-        batch.brew_posted_at = ts;
-        await updateRow('Batches', batch.id, { ...batch });
-
-        showToast(t('posted_ok'));
-        closeModal();
-        await renderBatches(pageContainer);
-      } catch (e) { showToast(e.message, 'error'); }
-    });
+    const brewIngredients = ingredients.filter(i =>
+      ['mash','boil','whirlpool','fermentation','dry_hop','wash','distillation'].includes(i.stage_key)
+    );
+    showBrewPostDialog(batch, brewIngredients, isBeer, pageContainer);
   });
 
   // Post Packaging
@@ -447,6 +420,108 @@ function renderPostingTab(container, batch, pageContainer, overlay) {
       } catch (e) { showToast(e.message, 'error'); }
     });
   });
+}
+
+function compDisplayName(c) {
+  return c.brand ? `${c.name} (${c.brand})` : c.name;
+}
+
+function showBrewPostDialog(batch, brewIngredients, isBeer, pageContainer) {
+  // Build a row per ingredient with component picker (same type)
+  const rows = brewIngredients.map((ing, idx) => {
+    const recipeComp = components.find(c => c.id === ing.component_id);
+    if (!recipeComp) return null;
+
+    // All active components of same type, with on-hand > 0 OR matching the recipe comp
+    const candidates = components.filter(c =>
+      c.is_active !== 'FALSE' && c.type === recipeComp.type
+    ).map(c => {
+      const onHand = calcOnHand(inventory, c.id);
+      const { price } = getEffectivePrice(c.id, inventory, components);
+      return { c, onHand, price };
+    });
+
+    const opts = candidates.map(({ c, onHand, price }) => {
+      const name = compDisplayName(c);
+      const stock = onHand > 0
+        ? `${onHand.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${c.unit}`
+        : 'нет на складе';
+      const priceStr = price ? ` · ${price} ₽/${c.unit}` : '';
+      const warn = onHand < (parseFloat(ing.qty) || 0) ? ' ⚠' : '';
+      return `<option value="${c.id}" ${c.id === ing.component_id ? 'selected' : ''}>${escHtml(name)} — ${escHtml(stock)}${escHtml(priceStr)}${warn}</option>`;
+    }).join('');
+
+    return `
+      <div class="brew-post-row" style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div style="flex:0 0 auto;min-width:120px">
+            <div class="text-muted text-sm">По рецепту</div>
+            <strong>${escHtml(compDisplayName(recipeComp))}</strong>
+            <div class="text-sm">${escHtml(ing.qty || '?')} ${escHtml(recipeComp.unit || '')}</div>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <div class="text-muted text-sm">Фактически использовано</div>
+            <select class="form-control brew-actual-comp" data-idx="${idx}" data-qty="${escHtml(ing.qty || '0')}">
+              ${opts}
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+  }).filter(Boolean).join('');
+
+  if (!rows) {
+    showToast('Нет ингредиентов для проводки', 'warning');
+    return;
+  }
+
+  showModal(isBeer ? 'Провести варку' : 'Провести брагу', `
+    <p style="margin-bottom:12px;color:var(--text-muted);font-size:0.9em">
+      Выберите какие именно компоненты были использованы.
+      Со склада спишутся выбранные позиции по их фактической цене закупки.
+    </p>
+    <div id="brew-post-rows">${rows}</div>
+  `, [
+    { label: t('cancel'), class: 'btn-secondary', action: 'cancel', onClick: closeModal },
+    { label: 'Провести', class: 'btn-primary', action: 'save', onClick: async (overlay) => {
+      try {
+        const ts = now();
+        const selects = overlay.querySelectorAll('.brew-actual-comp');
+        const inventoryRows = [];
+
+        selects.forEach((sel, idx) => {
+          const chosenId = sel.value;
+          const qty = parseFloat(sel.dataset.qty) || 0;
+          if (!chosenId || qty <= 0) return;
+
+          const chosenComp = components.find(c => c.id === chosenId);
+          const { price } = getEffectivePrice(chosenId, inventory, components);
+
+          inventoryRows.push({
+            id: genId(),
+            component_id: chosenId,
+            qty_delta: String(-qty),
+            movement_type: isBeer ? 'brew_consume' : 'distill_consume',
+            ref_type: 'batch',
+            ref_id: batch.id,
+            unit_cost: price !== null ? String(price) : '0',
+            notes: `${batch.name}${chosenComp?.brand ? ` (${chosenComp.brand})` : ''}`,
+            created_at: ts,
+          });
+        });
+
+        if (inventoryRows.length) await appendRows('Inventory', inventoryRows);
+
+        batch.brew_posted = 'TRUE';
+        batch.brew_posted_at = ts;
+        await updateRow('Batches', batch.id, { ...batch });
+
+        closeModal();
+        showToast(t('posted_ok'));
+        await renderBatches(pageContainer);
+      } catch (e) { showToast(e.message, 'error'); }
+    }},
+  ]);
 }
 
 function renderSummaryTab(container, batch) {
