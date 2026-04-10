@@ -2,7 +2,7 @@
 // Replace these values with your own credentials
 
 export const GOOGLE_CLIENT_ID = '142870288719-uqoo2rk3llaajn4upvq5kfth8is50k3d.apps.googleusercontent.com';
-export const SPREADSHEET_ID = '1TxavRP31LKApJkcJrSq4pK69In_eompA_nVyshDGmI0;
+export const SPREADSHEET_ID = '1TxavRP31LKApJkcJrSq4pK69In_eompA_nVyshDGmI0';
 export const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 
 export const SHEET_NAMES = {
