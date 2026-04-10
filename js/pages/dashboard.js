@@ -7,13 +7,14 @@ import t from '../i18n.js';
 export async function renderDashboard(container) {
   showLoading(container);
   try {
-    const [components, inventory, batches, customers, sales, moneyLedger, settings] = await Promise.all([
+    const [components, inventory, batches, customers, sales, moneyLedger, equipment, settings] = await Promise.all([
       getRows('Components'),
       getRows('Inventory'),
       getRows('Batches'),
       getRows('Customers'),
       getRows('Sales'),
       getRows('MoneyLedger'),
+      getRows('Equipment'),
       getSettings(),
     ]);
 
@@ -51,18 +52,23 @@ export async function renderDashboard(container) {
     ).length;
 
     // 7. CAPEX & Break-even
-    const equipmentMovements = moneyLedger.filter(r =>
-      r.movement_type === 'equipment_purchase' || r.movement_type === 'equipment_sale'
-    );
-    const capexInvested = equipmentMovements
-      .filter(r => r.movement_type === 'equipment_purchase')
-      .reduce((s, r) => s + Math.abs(parseFloat(r.amount_signed || 0)), 0);
-    const capexRecovered = equipmentMovements
-      .filter(r => r.movement_type === 'equipment_sale')
-      .reduce((s, r) => s + parseFloat(r.amount_signed || 0), 0);
+    // Source of truth: Equipment sheet (covers both manual entry and JSON import)
+    const activeEquipment = equipment.filter(e => e.is_active !== 'FALSE');
+    const capexInvested = activeEquipment
+      .reduce((s, e) => s + (parseFloat(e.purchase_price) || 0), 0);
+    const capexRecovered = activeEquipment
+      .filter(e => e.sale_price && parseFloat(e.sale_price) > 0)
+      .reduce((s, e) => s + (parseFloat(e.sale_price) || 0), 0);
     const netCapex = capexInvested - capexRecovered;
 
-    // Operational flow = everything except equipment movements
+    // First purchase date from Equipment sheet
+    const firstEquipDate = activeEquipment
+      .map(e => new Date(e.purchase_date || e.created_at))
+      .filter(d => !isNaN(d))
+      .sort((a, b) => a - b)[0];
+
+    // Operational flow = MoneyLedger excluding equipment movements
+    // (equipment_purchase in MoneyLedger may exist for manually-added items — exclude to avoid double-counting)
     const operationalFlow = moneyLedger
       .filter(r => r.movement_type !== 'equipment_purchase' && r.movement_type !== 'equipment_sale')
       .reduce((s, r) => s + parseFloat(r.amount_signed || 0), 0);
@@ -74,22 +80,15 @@ export async function renderDashboard(container) {
 
     // Project break-even date based on avg monthly operational flow
     let breakEvenProjection = null;
-    if (remaining > 0 && operationalFlow > 0) {
-      // Find first equipment purchase date to measure elapsed time
-      const firstEquipDate = equipmentMovements
-        .filter(r => r.movement_type === 'equipment_purchase')
-        .map(r => new Date(r.created_at))
-        .sort((a, b) => a - b)[0];
-      if (firstEquipDate) {
-        const monthsElapsed = Math.max(1,
-          (Date.now() - firstEquipDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-        );
-        const monthlyRate = operationalFlow / monthsElapsed;
-        if (monthlyRate > 0) {
-          const monthsLeft = remaining / monthlyRate;
-          const breakEvenDate = new Date(Date.now() + monthsLeft * 30.44 * 24 * 60 * 60 * 1000);
-          breakEvenProjection = { monthsLeft: Math.round(monthsLeft), date: breakEvenDate, monthlyRate };
-        }
+    if (remaining > 0 && firstEquipDate) {
+      const monthsElapsed = Math.max(1,
+        (Date.now() - firstEquipDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+      );
+      const monthlyRate = operationalFlow / monthsElapsed;
+      if (monthlyRate > 0) {
+        const monthsLeft = remaining / monthlyRate;
+        const breakEvenDate = new Date(Date.now() + monthsLeft * 30.44 * 24 * 60 * 60 * 1000);
+        breakEvenProjection = { monthsLeft: Math.round(monthsLeft), date: breakEvenDate, monthlyRate };
       }
     } else if (remaining <= 0 && netCapex > 0) {
       breakEvenProjection = { done: true };
