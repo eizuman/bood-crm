@@ -40,6 +40,8 @@ export const MOVEMENT_COLORS = {
   sale_charge:        '#F44336',
   refund:             '#4CAF50',
   purchase_expense:   '#B5622A',
+  equipment_purchase: '#7C3AED',
+  equipment_sale:     '#059669',
 };
 
 // ─── Unit helpers ─────────────────────────────────────────────────────────────

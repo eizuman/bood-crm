@@ -84,6 +84,9 @@
       </a>
 
       <div class="nav-divider"></div>
+      <a href="#/equipment"    class="nav-item" data-route="/equipment">
+        <span class="nav-icon">🔧</span> Оборудование
+      </a>
       <a href="#/settings"     class="nav-item" data-route="/settings">
         <span class="nav-icon">⚙</span> Настройки
       </a>
@@ -147,6 +150,7 @@
     '/distillation': () => import('./js/pages/distillation.js').then(m => m.renderDistillation),
     '/customers':    () => import('./js/pages/customers.js').then(m => m.renderCustomers),
     '/sales':        () => import('./js/pages/sales.js').then(m => m.renderSales),
+    '/equipment':    () => import('./js/pages/equipment.js').then(m => m.renderEquipment),
     '/settings':     () => import('./js/pages/settings.js').then(m => m.renderSettings),
   };
 
@@ -219,6 +223,7 @@
   register('/distillation', () => loadPage(pages['/distillation']));
   register('/customers',    () => loadPage(pages['/customers']));
   register('/sales',        () => loadPage(pages['/sales']));
+  register('/equipment',    () => loadPage(pages['/equipment']));
   register('/settings',     () => loadPage(pages['/settings']));
 
   // ── Active nav highlight ──────────────────────────────────────────────────

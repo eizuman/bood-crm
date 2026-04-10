@@ -15,6 +15,7 @@ export const SHEET_NAMES = {
   CUSTOMERS: 'Customers',
   SALES: 'Sales',
   MONEY_LEDGER: 'MoneyLedger',
+  EQUIPMENT: 'Equipment',
   SETTINGS: 'Settings',
 };
 
@@ -28,6 +29,7 @@ export const SHEET_HEADERS = {
   Customers: ['id','name','phone','email','notes','is_active','created_at','updated_at'],
   Sales: ['id','customer_id','items_snapshot','status','total_amount','posted_at','notes','is_active','created_at','updated_at'],
   MoneyLedger: ['id','customer_id','amount_signed','movement_type','ref_type','ref_id','notes','created_at'],
+  Equipment: ['id','name','category','purchase_price','purchase_date','status','sale_price','sale_date','notes','is_active','created_at','updated_at'],
   Settings: ['key','value','updated_at'],
 };
 
