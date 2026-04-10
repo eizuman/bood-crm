@@ -42,6 +42,35 @@ export const MOVEMENT_COLORS = {
   purchase_expense:   '#B5622A',
 };
 
+// ─── Unit helpers ─────────────────────────────────────────────────────────────
+// Convert qty to grams (solids) or ml (liquids) for physics calculations
+export function toGrams(qty, unit) {
+  const n = parseFloat(qty) || 0;
+  switch (unit) {
+    case 'кг': return n * 1000;
+    case 'г':  return n;
+    case 'л':  return n * 1000;
+    case 'мл': return n;
+    default:   return n;
+  }
+}
+
+// Returns effective price per unit: last purchase → component.cost_per_unit → null
+// source: 'purchase' | 'reference' | 'none'
+export function getEffectivePrice(componentId, inventory, components) {
+  const purchases = (inventory || [])
+    .filter(m => m.component_id === componentId && m.movement_type === 'purchase' && parseFloat(m.unit_cost) > 0)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (purchases.length > 0) {
+    return { price: parseFloat(purchases[0].unit_cost), source: 'purchase' };
+  }
+  const comp = (components || []).find(c => c.id === componentId);
+  if (comp?.cost_per_unit && parseFloat(comp.cost_per_unit) > 0) {
+    return { price: parseFloat(comp.cost_per_unit), source: 'reference' };
+  }
+  return { price: null, source: 'none' };
+}
+
 // ─── Calculations ──────────────────────────────────────────────────────────────
 export function calcABV(og, fg) {
   if (!og || !fg) return 0;
@@ -52,12 +81,12 @@ export function calcIBU(hops) {
   // Tinseth formula simplified
   return hops.reduce((sum, hop) => {
     const aa = parseFloat(hop.alpha_acid || 0) / 100;
-    const qty = parseFloat(hop.qty || 0); // grams
+    const grams = toGrams(hop.qty || 0, hop._unit || 'г');
     const time = parseFloat(hop.time_meta || 0); // minutes
     const og = 1.050; // placeholder
     const utilization = (1 - Math.exp(-0.04 * time)) / 4.15;
     const bignessFactor = 1.65 * Math.pow(0.000125, og - 1);
-    return sum + (aa * qty * 1000 * bignessFactor * utilization);
+    return sum + (aa * grams * 1000 * bignessFactor * utilization);
   }, 0).toFixed(1);
 }
 
@@ -66,7 +95,7 @@ export function calcEstimatedOG(grains, batchSizeL) {
   if (!batchSizeL || batchSizeL <= 0) return 0;
   const totalPoints = grains.reduce((sum, g) => {
     const ppg = (parseFloat(g.attenuation || 75) / 100) * 46; // rough PPG from extract
-    const kg = parseFloat(g.qty || 0) / 1000;
+    const kg = toGrams(g.qty || 0, g._unit || 'г') / 1000;
     return sum + (ppg * kg * 2.2046); // convert to PPG·lbs
   }, 0);
   const gallons = batchSizeL / 3.785;

@@ -1,7 +1,7 @@
 // Bood CRM — Recipes Page (Beer & Spirit)
 import { getRows, appendRow, appendRows, updateRow, softDelete, genId, now } from '../sheets.js';
 import { getSettings } from '../sheets.js';
-import { calcABV, calcCOGS, calcOnHand, formatCurrency, escHtml, generateBeerSteps, generateSpiritSteps } from '../utils.js';
+import { calcABV, calcCOGS, calcOnHand, formatCurrency, escHtml, generateBeerSteps, generateSpiritSteps, getEffectivePrice } from '../utils.js';
 import { showModal, closeModal, showConfirm, showToast, showLoading, showError,
   renderTabs, pageHeader, formField, textInput, numberInput, selectInput, textareaInput, collectForm, sectionCard } from '../ui.js';
 import t from '../i18n.js';
@@ -225,6 +225,20 @@ function showRecipeEditor(recipe, pageContainer) {
         const idx = parseInt(btn.dataset.idx);
         recipeMashRests.splice(idx, 1);
         renderTabContent();
+      });
+    });
+
+    // Update component selection + unit label
+    tabContent.querySelectorAll('.ingredient-comp').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const idx = parseInt(sel.dataset.idx);
+        const stage = sel.dataset.stage;
+        const comp = components.find(c => c.id === sel.value);
+        const unitLabel = sel.closest('.ingredient-row')?.querySelector('.ingredient-unit');
+        if (unitLabel) unitLabel.textContent = comp?.unit || '';
+        const stageIngredients = recipeIngredients.filter(i => i.stage_key === stage);
+        if (stageIngredients[idx]) stageIngredients[idx].component_id = sel.value;
+        isDirty = true;
       });
     });
 
@@ -507,14 +521,15 @@ function renderIngredientList(items, stageKey, allowedTypes = []) {
 
   return items.map((ing, i) => {
     const comp = components.find(c => c.id === ing.component_id);
-    const compName = comp?.name || ing.component_id || '?';
+    const unit = comp?.unit || '';
     return `
       <div class="ingredient-row">
         <select class="form-control ingredient-comp" data-idx="${i}" data-stage="${stageKey}" style="flex:2">
           ${filteredComponents.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
         </select>
         <input type="number" class="form-control ingredient-qty" data-idx="${i}" data-stage="${stageKey}"
-          value="${escHtml(ing.qty||'')}" placeholder="Кол-во" step="any" style="width:100px">
+          value="${escHtml(ing.qty||'')}" placeholder="Кол-во" step="any" style="width:90px">
+        <span class="ingredient-unit text-muted" style="min-width:28px;font-size:0.85em">${escHtml(unit)}</span>
         ${stageKey === 'boil' || stageKey === 'dry_hop' ? `<input type="number" class="form-control ingredient-time" data-idx="${i}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="${stageKey==='boil'?'мин':'день'}" style="width:80px">` : ''}
         <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-idx="${i}" data-stage="${stageKey}">✕</button>
       </div>
@@ -523,11 +538,22 @@ function renderIngredientList(items, stageKey, allowedTypes = []) {
 }
 
 function renderCostsTab(container, data, ingredients, mashRests, type) {
-  const ingCosts = ingredients.reduce((sum, ing) => {
+  const SOURCE_LABEL = { purchase: 'факт. цена', reference: 'справ. цена', none: '⚠ нет цены' };
+  const SOURCE_CLASS = { purchase: 'text-success', reference: 'text-muted', none: 'text-danger' };
+
+  // Per-ingredient cost using effective prices
+  let ingCosts = 0;
+  const missingPrice = [];
+  const ingDetails = ingredients.map(ing => {
     const comp = components.find(c => c.id === ing.component_id);
-    if (!comp) return sum;
-    return sum + (parseFloat(ing.qty) || 0) * (parseFloat(comp.cost_per_unit) || 0);
-  }, 0);
+    if (!comp) return null;
+    const qty = parseFloat(ing.qty) || 0;
+    const { price, source } = getEffectivePrice(ing.component_id, inventory, components);
+    const cost = price !== null ? qty * price : null;
+    if (cost !== null) ingCosts += cost;
+    else missingPrice.push(comp.name);
+    return { comp, qty, price, source, cost };
+  }).filter(Boolean);
 
   const onHand = {};
   components.forEach(c => { onHand[c.id] = calcOnHand(inventory, c.id); });
@@ -548,10 +574,35 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
 
   container.innerHTML = `
     <div class="costs-grid">
+
+      <div class="section-card">
+        <div class="section-card-header"><h4>Стоимость ингредиентов</h4></div>
+        <div class="section-card-body p-0">
+          <table class="data-table">
+            <thead><tr><th>Компонент</th><th>Кол-во</th><th>Цена/ед</th><th>Источник</th><th>Стоимость</th></tr></thead>
+            <tbody>
+              ${ingDetails.map(({ comp, qty, price, source, cost }) => `
+                <tr>
+                  <td>${escHtml(comp.name)}</td>
+                  <td>${qty} ${escHtml(comp.unit || '')}</td>
+                  <td>${price !== null ? formatCurrency(price, settings.currency) : '—'}</td>
+                  <td><span class="${SOURCE_CLASS[source]}" style="font-size:0.8em">${SOURCE_LABEL[source]}</span></td>
+                  <td>${cost !== null ? formatCurrency(cost, settings.currency) : '<span class="text-danger">?</span>'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      ${missingPrice.length ? `
+        <div class="alert alert-warning">⚠ Нет цены для: <strong>${missingPrice.map(n => escHtml(n)).join(', ')}</strong>. Добавьте закупку на склад или справочную цену в компонент.</div>
+      ` : ''}
+
       ${deficit.length ? `
         <div class="section-card">
           <div class="section-card-header"><h4>Список закупок (дефицит)</h4></div>
-          <div class="section-card-body">
+          <div class="section-card-body p-0">
             <table class="data-table">
               <thead><tr><th>Компонент</th><th>Нужно</th><th>Есть</th><th>Дефицит</th></tr></thead>
               <tbody>
@@ -561,16 +612,16 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
                   const have = onHand[ing.component_id] || 0;
                   return `<tr>
                     <td>${escHtml(comp?.name || '?')}</td>
-                    <td>${need} ${comp?.unit||''}</td>
-                    <td class="${have<0?'text-danger':''}">${have} ${comp?.unit||''}</td>
-                    <td class="text-danger">${(need-have).toFixed(2)} ${comp?.unit||''}</td>
+                    <td>${need} ${escHtml(comp?.unit || '')}</td>
+                    <td class="${have < 0 ? 'text-danger' : ''}">${have} ${escHtml(comp?.unit || '')}</td>
+                    <td class="text-danger">${(need - have).toFixed(2)} ${escHtml(comp?.unit || '')}</td>
                   </tr>`;
                 }).join('')}
               </tbody>
             </table>
           </div>
         </div>
-      ` : `<div class="alert alert-success">✓ Все ингредиенты на складе</div>`}
+      ` : `<div class="alert alert-success">✓ Все ингредиенты в наличии на складе</div>`}
 
       <div class="section-card">
         <div class="section-card-header"><h4>Автоматические шаги</h4></div>
@@ -590,12 +641,12 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
         <div class="section-card-header"><h4>Предварительная стоимость</h4></div>
         <div class="section-card-body">
           <table class="cost-table">
-            <tr><td>Ингредиенты</td><td>${formatCurrency(ingCosts, settings.currency)}</td></tr>
+            <tr><td>Ингредиенты ${missingPrice.length ? '<span class="text-danger" style="font-size:0.8em">(часть без цены)</span>' : ''}</td><td>${formatCurrency(ingCosts, settings.currency)}</td></tr>
             <tr><td>Электроэнергия (расч.)</td><td>${formatCurrency(energy, settings.currency)}</td></tr>
             <tr><td>Вода</td><td>${formatCurrency(water, settings.currency)}</td></tr>
             <tr><td>Труд (расч.)</td><td>${formatCurrency(labor, settings.currency)}</td></tr>
             <tr class="cost-total"><td><strong>Итого</strong></td><td><strong>${formatCurrency(total, settings.currency)}</strong></td></tr>
-            <tr><td>На литр</td><td>${formatCurrency(perL, settings.currency)}</td></tr>
+            ${perL ? `<tr><td>На литр</td><td>${formatCurrency(perL, settings.currency)}</td></tr>` : ''}
           </table>
           <div style="margin-top:16px">
             <button type="button" class="btn btn-secondary" onclick="window.print()">🖨 ${t('print_recipe')}</button>
