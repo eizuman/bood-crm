@@ -3,7 +3,7 @@ import { getRows, appendRow, appendRows, updateRow, softDelete, genId, now } fro
 import { getSettings } from '../sheets.js';
 import { calcABV, calcCOGS, calcOnHand, formatCurrency, escHtml, generateBeerSteps, generateSpiritSteps, getEffectivePrice } from '../utils.js';
 import { showModal, closeModal, showConfirm, showToast, showLoading, showError,
-  renderTabs, pageHeader, formField, textInput, numberInput, selectInput, textareaInput, collectForm, sectionCard } from '../ui.js';
+  renderTabs, pageHeader, formField, textInput, numberInput, selectInput, textareaInput, collectForm } from '../ui.js';
 import t from '../i18n.js';
 
 let components = [];
@@ -688,11 +688,54 @@ function addMashRest(restsArr, refresh) {
 async function createBatchFromRecipe(recipe) {
   const recipeIngs = ingredients.filter(i => i.recipe_id === recipe.id);
   const recipeMRests = mashRests.filter(r => r.recipe_id === recipe.id);
+
+  // Stock check
+  const deficit = recipeIngs.map(ing => {
+    const comp = components.find(c => c.id === ing.component_id);
+    if (!comp) return null;
+    const need = parseFloat(ing.qty) || 0;
+    const have = inventory
+      .filter(m => m.component_id === ing.component_id)
+      .reduce((s, m) => s + (parseFloat(m.qty_delta) || 0), 0);
+    if (need <= 0 || have >= need) return null;
+    return { name: comp.name, unit: comp.unit, need, have, short: need - have };
+  }).filter(Boolean);
+
+  if (deficit.length > 0) {
+    const rows = deficit.map(d =>
+      `<tr>
+        <td>${escHtml(d.name)}</td>
+        <td>${d.need} ${escHtml(d.unit)}</td>
+        <td class="${d.have <= 0 ? 'text-danger' : 'text-warning'}">${d.have.toFixed(2)} ${escHtml(d.unit)}</td>
+        <td class="text-danger"><strong>${d.short.toFixed(2)} ${escHtml(d.unit)}</strong></td>
+      </tr>`
+    ).join('');
+
+    showModal('Недостаточно ингредиентов на складе', `
+      <p style="margin-bottom:12px">Для запуска партии не хватает следующих ингредиентов:</p>
+      <table class="data-table">
+        <thead><tr><th>Компонент</th><th>Нужно</th><th>Есть</th><th>Не хватает</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="margin-top:12px;color:var(--text-muted);font-size:0.9em">Можно создать партию сейчас и докупить позже.</p>
+    `, [
+      { label: 'Отмена', class: 'btn-secondary', action: 'cancel', onClick: closeModal },
+      { label: 'Создать всё равно', class: 'btn-primary', action: 'save', onClick: async () => {
+        closeModal();
+        await _doCreateBatch(recipe, recipeIngs, recipeMRests);
+      }},
+    ]);
+    return;
+  }
+
+  await _doCreateBatch(recipe, recipeIngs, recipeMRests);
+}
+
+async function _doCreateBatch(recipe, recipeIngs, recipeMRests) {
   const snapshot = JSON.stringify({ recipe, ingredients: recipeIngs, mashRests: recipeMRests });
   const ts = now();
   const batchId = genId();
   const batchName = `${recipe.name} — ${new Date().toLocaleDateString('ru-RU')}`;
-
   try {
     await appendRow('Batches', {
       id: batchId,
