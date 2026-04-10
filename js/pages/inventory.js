@@ -1,5 +1,5 @@
 // Bood CRM — Inventory Page
-import { getRows, appendRow, genId, now, getSettings } from '../sheets.js';
+import { getRows, appendRow, updateRow, genId, now, getSettings } from '../sheets.js';
 import { calcOnHand } from '../utils.js';
 import { showModal, closeModal, showToast, showLoading, showError,
   renderTable, createTypeChip, createMovementChip, pageHeader,
@@ -9,6 +9,7 @@ import { escHtml, formatCurrency, formatDate, formatDateTime } from '../utils.js
 
 let components = [];
 let inventory = [];
+let moneyLedger = [];
 let settings = {};
 let activeTypeFilter = 'all';
 
@@ -28,9 +29,10 @@ const TYPE_TABS = [
 export async function renderInventory(container) {
   showLoading(container);
   try {
-    [components, inventory, settings] = await Promise.all([
+    [components, inventory, moneyLedger, settings] = await Promise.all([
       getRows('Components'),
       getRows('Inventory'),
+      getRows('MoneyLedger'),
       getSettings(),
     ]);
     _render(container);
@@ -102,7 +104,9 @@ function _render(container) {
         .filter(i => i.component_id === r.id && i.movement_type === 'purchase')
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
       if (!last) return '—';
-      return `${formatDate(last.created_at)}${last.unit_cost ? ` · ${formatCurrency(last.unit_cost, settings.currency)}/${escHtml(r.unit || '')}` : ''}`;
+      const brand = last.brand ? `<span class="text-muted"> · ${escHtml(last.brand)}</span>` : '';
+      const price = last.unit_cost ? ` · ${formatCurrency(last.unit_cost, settings.currency)}/${escHtml(r.unit || '')}` : '';
+      return `${formatDate(last.created_at)}${price}${brand}`;
     }},
   ];
 
@@ -117,7 +121,7 @@ function _render(container) {
     { label: 'Дата', render: r => formatDateTime(r.created_at) },
     { label: 'Компонент', render: r => {
       const c = components.find(c => c.id === r.component_id);
-      return escHtml(c?.name || r.component_id);
+      return `${escHtml(c?.name || r.component_id)}${r.brand ? `<br><span class="text-muted text-sm">${escHtml(r.brand)}</span>` : ''}`;
     }},
     { label: 'Тип', render: r => createMovementChip(r.movement_type) },
     { label: 'Δ Кол-во', render: r => {
@@ -126,15 +130,26 @@ function _render(container) {
       const c = components.find(c => c.id === r.component_id);
       return `<span class="${cls}">${n > 0 ? '+' : ''}${n.toLocaleString('ru-RU', { maximumFractionDigits: 3 })} ${escHtml(c?.unit || '')}</span>`;
     }},
-    { label: 'Стоимость', render: r => {
+    { label: 'Сумма', render: r => {
       const cost = parseFloat(r.unit_cost) * Math.abs(parseFloat(r.qty_delta || 0));
       return cost ? formatCurrency(cost, settings.currency) : '—';
     }},
     { label: 'Заметки', render: r => `<span class="text-muted text-sm">${escHtml(r.notes || '')}</span>` },
+    { label: '', render: r => r.movement_type === 'purchase'
+      ? `<button class="btn btn-sm btn-secondary btn-edit-purchase" data-id="${r.id}">✎</button>`
+      : ''
+    },
   ];
 
   renderTable(container.querySelector('#ledger-table'), ledgerCols, ledger, {
     emptyMessage: 'Нет движений',
+  });
+
+  container.querySelectorAll('.btn-edit-purchase').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const entry = inventory.find(i => i.id === btn.dataset.id);
+      if (entry) showEditPurchaseForm(entry, container);
+    });
   });
 
   // Type filter chips
@@ -186,7 +201,8 @@ function showPurchaseForm(pageContainer) {
         <input type="text" class="form-control" id="unit-cost-display" readonly placeholder="рассчитается автоматически" style="color:var(--text-muted)">
         <input type="hidden" name="unit_cost" id="unit-cost-hidden">
       </div>
-      ${formField('Поставщик', textInput('supplier', ''))}
+      ${formField('Производитель / Бренд', textInput('brand', ''), 'Например: Курский, Castle Malting, Hopsteiner')}
+      ${formField('Поставщик', textInput('supplier', ''), 'Магазин или сайт')}
       ${formField('Дата', `<input type="date" name="purchase_date" class="form-control" value="${new Date().toISOString().slice(0, 10)}">`)}
       ${formField(t('notes'), textareaInput('notes', ''))}
     </form>
@@ -222,6 +238,7 @@ function showPurchaseForm(pageContainer) {
           unit_cost: String(unitCost),
           notes,
           created_at: data.purchase_date ? new Date(data.purchase_date).toISOString() : ts,
+          brand: data.brand || '',
         });
 
         await appendRow('MoneyLedger', {
@@ -231,7 +248,7 @@ function showPurchaseForm(pageContainer) {
           movement_type: 'purchase_expense',
           ref_type: 'inventory',
           ref_id: inventoryId,
-          notes: `Закупка: ${comp?.name || ''} ${qty} ${comp?.unit || ''} — ${totalPaid} руб`,
+          notes: `Закупка: ${comp?.name || ''}${data.brand ? ` (${data.brand})` : ''} ${qty} ${comp?.unit || ''} — ${totalPaid} руб`,
           created_at: ts,
         });
 
@@ -268,4 +285,102 @@ function showPurchaseForm(pageContainer) {
   overlay.querySelector('#purchase-component')?.addEventListener('change', recalc);
   overlay.querySelector('[name=qty]')?.addEventListener('input', recalc);
   overlay.querySelector('[name=total_paid]')?.addEventListener('input', recalc);
+}
+
+function showEditPurchaseForm(entry, pageContainer) {
+  const comp = components.find(c => c.id === entry.component_id);
+  const unit = comp?.unit || '';
+  const currentQty = parseFloat(entry.qty_delta) || 0;
+  const currentUnitCost = parseFloat(entry.unit_cost) || 0;
+  const currentTotal = currentQty * currentUnitCost;
+  const purchaseDate = entry.created_at ? entry.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+  // Parse supplier from notes (format: "supplier | notes")
+  const notesParts = (entry.notes || '').split(' | ');
+  const supplier = notesParts.length > 1 ? notesParts[0] : '';
+  const notes = notesParts.length > 1 ? notesParts.slice(1).join(' | ') : entry.notes || '';
+
+  const html = `
+    <form id="edit-purchase-form" class="form-grid">
+      <div class="form-field">
+        <label class="form-label">Компонент</label>
+        <input type="text" class="form-control" value="${escHtml(comp?.name || entry.component_id)}" readonly style="color:var(--text-muted)">
+      </div>
+      <div class="form-row-2">
+        <div class="form-field">
+          <label class="form-label">Количество ${unit ? `(${unit})` : ''} <span class="text-danger">*</span></label>
+          <input type="number" name="qty" class="form-control" min="0.001" step="any" value="${currentQty}">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Сумма за покупку (руб) <span class="text-danger">*</span></label>
+          <input type="number" name="total_paid" class="form-control" min="0" step="any" value="${currentTotal.toFixed(2)}">
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Цена за единицу</label>
+        <input type="text" class="form-control" id="edit-unit-cost-display" readonly style="color:var(--text-muted)"
+          value="${currentUnitCost ? `${currentUnitCost.toLocaleString('ru-RU', { maximumFractionDigits: 4 })} ₽ / ${unit || 'ед'}` : ''}">
+      </div>
+      ${formField('Производитель / Бренд', textInput('brand', entry.brand || ''))}
+      ${formField('Поставщик', textInput('supplier', supplier))}
+      ${formField('Дата', `<input type="date" name="purchase_date" class="form-control" value="${purchaseDate}">`)}
+      ${formField(t('notes'), textareaInput('notes', notes))}
+    </form>
+  `;
+
+  const overlay = showModal('Редактировать закупку', html, [
+    { label: t('cancel'), class: 'btn-secondary', action: 'cancel', onClick: closeModal },
+    { label: t('save'), class: 'btn-primary', action: 'save', onClick: async (overlay) => {
+      const form = overlay.querySelector('#edit-purchase-form');
+      const data = collectForm(form);
+      const qty = parseFloat(data.qty);
+      const totalPaid = parseFloat(data.total_paid);
+      if (!qty || qty <= 0) { showToast('Укажите количество', 'warning'); return; }
+      if (isNaN(totalPaid) || totalPaid < 0) { showToast('Укажите сумму', 'warning'); return; }
+
+      const unitCost = qty > 0 ? totalPaid / qty : 0;
+      const notesSaved = [data.supplier, data.notes].filter(Boolean).join(' | ');
+
+      try {
+        // Update inventory row
+        await updateRow('Inventory', entry.id, {
+          ...entry,
+          qty_delta: String(qty),
+          unit_cost: String(unitCost),
+          brand: data.brand || '',
+          notes: notesSaved,
+          created_at: data.purchase_date ? new Date(data.purchase_date).toISOString() : entry.created_at,
+        });
+
+        // Update corresponding MoneyLedger entry
+        const ledgerEntry = moneyLedger.find(r => r.ref_type === 'inventory' && r.ref_id === entry.id);
+        if (ledgerEntry) {
+          await updateRow('MoneyLedger', ledgerEntry.id, {
+            ...ledgerEntry,
+            amount_signed: String(-totalPaid),
+            notes: `Закупка: ${comp?.name || ''}${data.brand ? ` (${data.brand})` : ''} ${qty} ${unit} — ${totalPaid} руб`,
+          });
+        }
+
+        closeModal();
+        showToast('Закупка обновлена');
+        await renderInventory(pageContainer);
+      } catch (e) { showToast(e.message, 'error'); }
+    }},
+  ]);
+
+  // Recalc unit cost on qty/total change
+  function recalcEdit() {
+    const qty = parseFloat(overlay.querySelector('[name=qty]')?.value) || 0;
+    const total = parseFloat(overlay.querySelector('[name=total_paid]')?.value) || 0;
+    const display = overlay.querySelector('#edit-unit-cost-display');
+    if (display) {
+      display.value = qty > 0 && total > 0
+        ? `${(total / qty).toLocaleString('ru-RU', { maximumFractionDigits: 4 })} ₽ / ${unit || 'ед'}`
+        : '';
+    }
+  }
+
+  overlay.querySelector('[name=qty]')?.addEventListener('input', recalcEdit);
+  overlay.querySelector('[name=total_paid]')?.addEventListener('input', recalcEdit);
 }
