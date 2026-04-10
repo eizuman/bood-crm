@@ -5,14 +5,20 @@ let tokenClient = null;
 let currentToken = null;
 let tokenExpiry = 0;
 
-export function initAuth(onSignIn, onSignOut) {
+export async function initAuth(onSignIn, onSignOut) {
+  await _waitForGIS();
   return new Promise((resolve) => {
-    // Wait for GIS to load
-    if (typeof google === 'undefined') {
-      window.addEventListener('load', () => _initTokenClient(onSignIn, onSignOut, resolve));
-    } else {
-      _initTokenClient(onSignIn, onSignOut, resolve);
-    }
+    _initTokenClient(onSignIn, onSignOut, resolve);
+  });
+}
+
+function _waitForGIS() {
+  return new Promise((resolve) => {
+    if (typeof google !== 'undefined') { resolve(); return; }
+    const iv = setInterval(() => {
+      if (typeof google !== 'undefined') { clearInterval(iv); resolve(); }
+    }, 50);
+    setTimeout(() => { clearInterval(iv); resolve(); }, 10000);
   });
 }
 
@@ -57,7 +63,7 @@ export function signIn() {
     showAuthError('Google Identity Services not loaded. Check your internet connection.');
     return;
   }
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  tokenClient.requestAccessToken({ prompt: 'select_account' });
 }
 
 export function signOut() {
