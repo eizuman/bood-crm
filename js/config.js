@@ -22,7 +22,7 @@ export const SHEET_NAMES = {
 export const SHEET_HEADERS = {
   Components: ['id','name','type','unit','cost_per_unit','ebc','alpha_acid','attenuation','spirit_type','notes','is_active','created_at','updated_at','brand'],
   Inventory: ['id','component_id','qty_delta','movement_type','ref_type','ref_id','unit_cost','notes','created_at','brand'],
-  Recipes: ['id','name','type','style','description','batch_size_l','fermenter_l','packaged_l','water_total_l','water_mash_l','water_sparge_l','hydromodule','boil_time_min','ferment_temp_c','ferment_days','og_target','fg_target','ibu_estimated','ebc_estimated','abv_estimated','estimated_cost','notes','manual_notes','is_active','created_at','updated_at','label_image'],
+  Recipes: ['id','name','type','style','description','batch_size_l','fermenter_l','packaged_l','water_total_l','water_mash_l','water_sparge_l','hydromodule','boil_time_min','ferment_temp_c','ferment_days','og_target','fg_target','ibu_estimated','ebc_estimated','abv_estimated','estimated_cost','notes','manual_notes','is_active','created_at','updated_at','label_image','brew_loss_pct','fermenter_loss_pct'],
   RecipeIngredients: ['id','recipe_id','component_id','qty','stage_key','time_meta','sort_order','created_at'],
   RecipeMashRests: ['id','recipe_id','sort_order','name','temp_c','duration_min','rest_type','created_at'],
   Batches: ['id','recipe_id','recipe_snapshot','name','type','status','brew_date','og','fg','abv','to_fermenter_l','packaged_l','package_date','kwh_used','labor_hours','brew_notes','ferment_notes','package_notes','brew_posted','brew_posted_at','packaging_posted','packaging_posted_at','cogs_snapshot','cogs_frozen_at','is_active','created_at','updated_at'],

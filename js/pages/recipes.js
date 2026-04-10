@@ -278,6 +278,23 @@ function showRecipeEditor(recipe, pageContainer) {
       });
     });
 
+    // ── Volume auto-calculation (anchor = fermenter_l) ───────────────────────
+    function recalcVolumes() {
+      const fl  = parseFloat(tabContent.querySelector('#vol-fermenter')?.value) || 0;
+      const bl  = parseFloat(tabContent.querySelector('#vol-brew-loss')?.value || settings.brew_loss_pct || 10);
+      const fml = parseFloat(tabContent.querySelector('#vol-ferm-loss')?.value || settings.fermenter_loss_pct || 5);
+      if (!fl) return;
+      const batch    = bl < 100 ? (fl / (1 - bl / 100)).toFixed(1) : '';
+      const packaged = (fl * (1 - fml / 100)).toFixed(1);
+      const batchEl   = tabContent.querySelector('#vol-batch');
+      const packedEl  = tabContent.querySelector('#vol-packaged');
+      if (batchEl)  { batchEl.value  = batch;    recipeData.batch_size_l = batch; }
+      if (packedEl) { packedEl.value = packaged;  recipeData.packaged_l   = packaged; }
+    }
+    ['#vol-fermenter','#vol-brew-loss','#vol-ferm-loss'].forEach(sel => {
+      tabContent.querySelector(sel)?.addEventListener('input', recalcVolumes);
+    });
+
     // ── BJCP style selector → auto-fill target ranges ──────────────────────────
     tabContent.querySelector('#bjcp-style-select')?.addEventListener('change', (e) => {
       const styleName = e.target.value;
@@ -497,9 +514,37 @@ function renderBeerTab(container, tab, data, ingredients, mashRests) {
         ` : ''}
 
         <div class="form-row-3">
-          ${formField('Объём варки (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="0.1">`)}
-          ${formField('Объём в ферментёр (л)', `<input type="number" name="fermenter_l" class="form-control" value="${escHtml(data.fermenter_l||'')}" step="0.1">`)}
-          ${formField('Объём в упаковку (л)', `<input type="number" name="packaged_l" class="form-control" value="${escHtml(data.packaged_l||'')}" step="0.1">`)}
+          <div class="form-group">
+            <label class="form-label">Объём в ферментёр (л) <span style="color:var(--accent);font-size:0.8em">● якорь</span></label>
+            <input type="number" name="fermenter_l" class="form-control" id="vol-fermenter"
+              value="${escHtml(data.fermenter_l||'')}" step="0.1" placeholder="20">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Потери при варке %</label>
+            <input type="number" name="brew_loss_pct" class="form-control" id="vol-brew-loss"
+              value="${escHtml(data.brew_loss_pct||'')}" step="0.5"
+              placeholder="${escHtml(settings.brew_loss_pct||'10')}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Потери в ферментёре %</label>
+            <input type="number" name="fermenter_loss_pct" class="form-control" id="vol-ferm-loss"
+              value="${escHtml(data.fermenter_loss_pct||'')}" step="0.5"
+              placeholder="${escHtml(settings.fermenter_loss_pct||'5')}">
+          </div>
+        </div>
+        <div class="form-row-2" style="margin-top:4px">
+          <div class="form-group">
+            <label class="form-label" style="color:var(--text-muted)">Объём варки (л) <span style="font-size:0.78em">авто</span></label>
+            <input type="number" name="batch_size_l" class="form-control" id="vol-batch"
+              value="${escHtml(data.batch_size_l||'')}" step="0.1" placeholder="—"
+              style="background:var(--bg-secondary)">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="color:var(--text-muted)">Объём в упаковку (л) <span style="font-size:0.78em">авто</span></label>
+            <input type="number" name="packaged_l" class="form-control" id="vol-packaged"
+              value="${escHtml(data.packaged_l||'')}" step="0.1" placeholder="—"
+              style="background:var(--bg-secondary)">
+          </div>
         </div>
 
         <div class="form-row-4">
