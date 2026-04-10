@@ -1,6 +1,7 @@
 // Bood CRM — Recipes Page (Beer & Spirit)
 import { getRows, appendRow, appendRows, updateRow, softDelete, genId, now } from '../sheets.js';
 import { getSettings } from '../sheets.js';
+import { BJCP_STYLES, getBjcpGroups, findStyle, sgToBrix, brixToSg, MASH_PRESETS } from '../bjcp.js';
 import { calcABV, calcCOGS, calcOnHand, formatCurrency, escHtml, generateBeerSteps, generateSpiritSteps, getEffectivePrice } from '../utils.js';
 import { showModal, closeModal, showConfirm, showToast, showLoading, showError,
   renderTabs, pageHeader, formField, textInput, numberInput, selectInput, textareaInput, collectForm } from '../ui.js';
@@ -81,9 +82,12 @@ function recipeCard(r) {
   return `
     <div class="recipe-card" data-id="${r.id}">
       <div class="recipe-card-header">
-        <div>
-          <h3 class="recipe-name">${escHtml(r.name)}</h3>
-          <span class="recipe-style text-muted">${escHtml(r.style || '')}</span>
+        <div style="display:flex;gap:12px;align-items:center">
+          ${r.label_image ? `<img src="${r.label_image}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">` : ''}
+          <div>
+            <h3 class="recipe-name">${escHtml(r.name)}</h3>
+            <span class="recipe-style text-muted">${escHtml(r.style || '')}</span>
+          </div>
         </div>
         <div class="recipe-actions">
           <button class="btn btn-sm btn-primary btn-brew">+ Варка</button>
@@ -160,9 +164,16 @@ function showRecipeEditor(recipe, pageContainer) {
     // Sync form fields back to recipeData on change
     tabContent.querySelectorAll('[name]').forEach(el => {
       el.addEventListener('change', () => {
-        recipeData[el.name] = el.value;
+        // OG/FG: convert Brix → SG when in Brix mode
+        if (el.name === 'og_target' && el.dataset.unit === 'brix' && el.value) {
+          recipeData.og_target = String(brixToSg(parseFloat(el.value)));
+        } else if (el.name === 'fg_target' && el.dataset.unit === 'brix' && el.value) {
+          recipeData.fg_target = String(brixToSg(parseFloat(el.value)));
+        } else {
+          recipeData[el.name] = el.value;
+        }
         isDirty = true;
-        // Auto-calc ABV
+        // Auto-calc ABV (always from stored SG values)
         if (['og_target','fg_target'].includes(el.name)) {
           const abv = calcABV(recipeData.og_target, recipeData.fg_target);
           const abvEl = tabContent.querySelector('[name=abv_estimated]');
@@ -266,12 +277,108 @@ function showRecipeEditor(recipe, pageContainer) {
         if (recipeMashRests[idx]) recipeMashRests[idx][field] = input.value;
       });
     });
+
+    // ── BJCP style selector → auto-fill target ranges ──────────────────────────
+    tabContent.querySelector('#bjcp-style-select')?.addEventListener('change', (e) => {
+      const styleName = e.target.value;
+      recipeData.style = styleName;
+      isDirty = true;
+      if (styleName) {
+        const bjcpStyle = BJCP_STYLES.find(s => s.name === styleName);
+        if (bjcpStyle) {
+          if (bjcpStyle.og) {
+            const mid = (((bjcpStyle.og[0] + bjcpStyle.og[1]) / 2) * 10000 | 0) / 10000;
+            recipeData.og_target = String(mid);
+          }
+          if (bjcpStyle.fg) {
+            const mid = (((bjcpStyle.fg[0] + bjcpStyle.fg[1]) / 2) * 10000 | 0) / 10000;
+            recipeData.fg_target = String(mid);
+          }
+          if (bjcpStyle.ibu) {
+            recipeData.ibu_estimated = String(Math.round((bjcpStyle.ibu[0] + bjcpStyle.ibu[1]) / 2));
+          }
+          if (bjcpStyle.ebc) {
+            recipeData.ebc_estimated = String(Math.round((bjcpStyle.ebc[0] + bjcpStyle.ebc[1]) / 2));
+          }
+          const abv = calcABV(recipeData.og_target, recipeData.fg_target);
+          recipeData.abv_estimated = abv;
+        }
+      }
+      renderTabContent();
+    });
+
+    // ── OG / FG unit toggles ──────────────────────────────────────────────────
+    tabContent.querySelector('.btn-og-sg')?.addEventListener('click', () => {
+      if ((recipeData._og_unit || 'sg') === 'brix') {
+        const v = tabContent.querySelector('[name=og_target]')?.value;
+        if (v) recipeData.og_target = String(brixToSg(parseFloat(v)));
+      }
+      recipeData._og_unit = 'sg';
+      renderTabContent();
+    });
+    tabContent.querySelector('.btn-og-brix')?.addEventListener('click', () => {
+      recipeData._og_unit = 'brix';
+      renderTabContent();
+    });
+    tabContent.querySelector('.btn-fg-sg')?.addEventListener('click', () => {
+      if ((recipeData._fg_unit || 'sg') === 'brix') {
+        const v = tabContent.querySelector('[name=fg_target]')?.value;
+        if (v) recipeData.fg_target = String(brixToSg(parseFloat(v)));
+      }
+      recipeData._fg_unit = 'sg';
+      renderTabContent();
+    });
+    tabContent.querySelector('.btn-fg-brix')?.addEventListener('click', () => {
+      recipeData._fg_unit = 'brix';
+      renderTabContent();
+    });
+
+    // ── Label image upload ────────────────────────────────────────────────────
+    tabContent.querySelector('.btn-upload-label')?.addEventListener('click', () => {
+      tabContent.querySelector('#label-upload')?.click();
+    });
+    tabContent.querySelector('#label-upload')?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const b64 = await resizeImageToBase64(file, 300, 300);
+        recipeData.label_image = b64;
+        renderTabContent();
+      } catch { showToast('Ошибка загрузки изображения', 'error'); }
+    });
+    tabContent.querySelector('.btn-clear-label')?.addEventListener('click', () => {
+      recipeData.label_image = '';
+      renderTabContent();
+    });
+
+    // ── Mash preset buttons ───────────────────────────────────────────────────
+    tabContent.querySelectorAll('.btn-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.preset;
+        if (recipeMashRests.length > 0) {
+          showConfirm('Заменить текущие паузы шаблоном?', '', () => {
+            loadMashPreset(key, recipeMashRests);
+            renderTabContent();
+          });
+        } else {
+          loadMashPreset(key, recipeMashRests);
+          renderTabContent();
+        }
+      });
+    });
   }
 
   async function saveRecipe() {
-    // Collect all open form fields
-    const form = overlay.querySelector('[name]');
-    overlay.querySelectorAll('[name]').forEach(el => { recipeData[el.name] = el.value; });
+    // Collect all open form fields (with Brix→SG conversion for OG/FG)
+    overlay.querySelectorAll('[name]').forEach(el => {
+      if (el.name === 'og_target' && el.dataset.unit === 'brix' && el.value) {
+        recipeData.og_target = String(brixToSg(parseFloat(el.value)));
+      } else if (el.name === 'fg_target' && el.dataset.unit === 'brix' && el.value) {
+        recipeData.fg_target = String(brixToSg(parseFloat(el.value)));
+      } else {
+        recipeData[el.name] = el.value;
+      }
+    });
 
     if (!recipeData.name?.trim()) { showToast('Введите название рецепта', 'warning'); return; }
     try {
@@ -346,21 +453,89 @@ function showRecipeEditor(recipe, pageContainer) {
 // ─── Beer tab renderers ───────────────────────────────────────────────────────
 function renderBeerTab(container, tab, data, ingredients, mashRests) {
   if (tab === 'overview') {
+    const ogUnit = data._og_unit || 'sg';
+    const fgUnit = data._fg_unit || 'sg';
+    const ogSgVal = data.og_target || '';
+    const fgSgVal = data.fg_target || '';
+    const ogDisplayVal = ogUnit === 'sg' ? ogSgVal : (ogSgVal ? String(sgToBrix(parseFloat(ogSgVal))) : '');
+    const fgDisplayVal = fgUnit === 'sg' ? fgSgVal : (fgSgVal ? String(sgToBrix(parseFloat(fgSgVal))) : '');
+    const ogAlt = ogUnit === 'sg' && ogSgVal ? `≈ ${sgToBrix(parseFloat(ogSgVal))} °Bx` : ogUnit === 'brix' && ogSgVal ? `≈ SG ${parseFloat(ogSgVal).toFixed(3)}` : '';
+    const fgAlt = fgUnit === 'sg' && fgSgVal ? `≈ ${sgToBrix(parseFloat(fgSgVal))} °Bx` : fgUnit === 'brix' && fgSgVal ? `≈ SG ${parseFloat(fgSgVal).toFixed(3)}` : '';
+    const selectedStyle = data.style ? BJCP_STYLES.find(s => s.name === data.style) : null;
+    const bjcpOptions = Object.entries(getBjcpGroups()).map(([cat, styles]) => `
+      <optgroup label="${escHtml(cat)}">
+        ${styles.map(s => `<option value="${escHtml(s.name)}" data-code="${s.code}" ${data.style === s.name ? 'selected' : ''}>${s.code} — ${escHtml(s.name)}</option>`).join('')}
+      </optgroup>
+    `).join('');
+    const togBtn = (cls, label, active) =>
+      `<button type="button" class="btn ${cls}" style="padding:1px 8px;font-size:0.78em;border-radius:${cls.includes('sg')?'4px 0 0 4px':'0 4px 4px 0'};background:${active?'var(--accent)':'var(--bg-secondary)'};color:${active?'#fff':'var(--text-muted)'};border:1px solid var(--border);${cls.includes('brix')?'border-left:none;':''}cursor:pointer">${label}</button>`;
+
     container.innerHTML = `
       <div class="form-grid">
         ${formField('Название', `<input type="text" name="name" class="form-control" value="${escHtml(data.name||'')}">`, '', true)}
-        ${formField('Стиль', `<input type="text" name="style" class="form-control" value="${escHtml(data.style||'')}" placeholder="IPA, Stout, Lager...">`)}
-        ${formField('Описание', `<textarea name="description" class="form-control" rows="3">${escHtml(data.description||'')}</textarea>`)}
+
+        <div class="form-row-2" style="align-items:start">
+          <div class="form-group">
+            <label class="form-label">Стиль BJCP</label>
+            <select name="style" class="form-control" id="bjcp-style-select">
+              <option value="">— не выбран —</option>
+              ${bjcpOptions}
+            </select>
+          </div>
+          ${formField('Описание', `<textarea name="description" class="form-control" rows="3">${escHtml(data.description||'')}</textarea>`)}
+        </div>
+
+        ${selectedStyle ? `
+          <div style="display:flex;gap:16px;flex-wrap:wrap;padding:8px 14px;background:var(--bg-secondary);border-radius:8px;font-size:0.85em;border-left:3px solid var(--accent)">
+            <span class="text-muted" style="line-height:1.8">BJCP ${escHtml(selectedStyle.code)}:</span>
+            ${selectedStyle.og  ? `<span>OG <strong>${selectedStyle.og[0]}–${selectedStyle.og[1]}</strong></span>` : ''}
+            ${selectedStyle.fg  ? `<span>FG <strong>${selectedStyle.fg[0]}–${selectedStyle.fg[1]}</strong></span>` : ''}
+            ${selectedStyle.ibu ? `<span>IBU <strong>${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</strong></span>` : ''}
+            ${selectedStyle.ebc ? `<span>EBC <strong>${selectedStyle.ebc[0]}–${selectedStyle.ebc[1]}</strong></span>` : ''}
+            ${selectedStyle.abv ? `<span>ABV <strong>${selectedStyle.abv[0]}–${selectedStyle.abv[1]}%</strong></span>` : ''}
+          </div>
+        ` : ''}
+
         <div class="form-row-3">
           ${formField('Объём варки (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="0.1">`)}
           ${formField('Объём в ферментёр (л)', `<input type="number" name="fermenter_l" class="form-control" value="${escHtml(data.fermenter_l||'')}" step="0.1">`)}
           ${formField('Объём в упаковку (л)', `<input type="number" name="packaged_l" class="form-control" value="${escHtml(data.packaged_l||'')}" step="0.1">`)}
         </div>
+
         <div class="form-row-4">
-          ${formField('OG', `<input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" placeholder="1.050">`)}
-          ${formField('FG', `<input type="number" name="fg_target" class="form-control" value="${escHtml(data.fg_target||'')}" step="0.001" placeholder="1.010">`)}
+          <div class="form-group">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <label class="form-label" style="margin:0">OG</label>
+              <div>${togBtn('btn-og-sg','SG',ogUnit==='sg')}${togBtn('btn-og-brix','°Bx',ogUnit==='brix')}</div>
+            </div>
+            <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisplayVal))}" step="${ogUnit==='sg'?'0.001':'0.1'}" placeholder="${ogUnit==='sg'?'1.050':'12.4'}" data-unit="${ogUnit}">
+            ${ogAlt ? `<div style="font-size:0.78em;color:var(--text-muted);margin-top:2px">${ogAlt}</div>` : ''}
+          </div>
+          <div class="form-group">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <label class="form-label" style="margin:0">FG</label>
+              <div>${togBtn('btn-fg-sg','SG',fgUnit==='sg')}${togBtn('btn-fg-brix','°Bx',fgUnit==='brix')}</div>
+            </div>
+            <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisplayVal))}" step="${fgUnit==='sg'?'0.001':'0.1'}" placeholder="${fgUnit==='sg'?'1.010':'2.6'}" data-unit="${fgUnit}">
+            ${fgAlt ? `<div style="font-size:0.78em;color:var(--text-muted);margin-top:2px">${fgAlt}</div>` : ''}
+          </div>
           ${formField('ABV %', `<input type="number" name="abv_estimated" class="form-control" value="${escHtml(data.abv_estimated||calcABV(data.og_target, data.fg_target)||'')}" step="0.1">`)}
           ${formField('IBU', `<input type="number" name="ibu_estimated" class="form-control" value="${escHtml(data.ibu_estimated||'')}" step="1">`)}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Этикетка (JPG/PNG)</label>
+          <div style="display:flex;gap:12px;align-items:center">
+            ${data.label_image
+              ? `<img src="${data.label_image}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">`
+              : `<div style="width:64px;height:64px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.5em">📷</div>`}
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <input type="file" id="label-upload" accept="image/jpeg,image/png,image/webp" style="display:none">
+              <input type="hidden" name="label_image" value="${escHtml(data.label_image||'')}">
+              <button type="button" class="btn btn-secondary btn-upload-label">Загрузить</button>
+              ${data.label_image ? `<button type="button" class="btn btn-danger btn-clear-label">Удалить</button>` : ''}
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -373,6 +548,12 @@ function renderBeerTab(container, tab, data, ingredients, mashRests) {
           ${formField('Вода промывка (л)', `<input type="number" name="water_sparge_l" class="form-control" value="${escHtml(data.water_sparge_l||'')}" step="0.1">`)}
         </div>
         <h4 style="margin: 16px 0 8px">Паузы затирания</h4>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <span class="text-muted text-sm">Шаблон:</span>
+          ${Object.entries(MASH_PRESETS).map(([k,p]) =>
+            `<button type="button" class="btn btn-sm btn-secondary btn-preset" data-preset="${k}">${escHtml(p.label)}</button>`
+          ).join('')}
+        </div>
         <div id="mash-rests-list">${renderMashRests(mashRests)}</div>
         <button type="button" class="btn btn-secondary btn-add-mash-rest">+ Добавить паузу</button>
       </div>
@@ -683,6 +864,49 @@ function addMashRest(restsArr, refresh) {
     created_at: now(),
   });
   refresh();
+}
+
+function resizeImageToBase64(file, maxW, maxH) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxW || h > maxH) {
+          const scale = Math.min(maxW / w, maxH / h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadMashPreset(key, restsArr) {
+  const preset = MASH_PRESETS[key];
+  if (!preset) return;
+  restsArr.length = 0;
+  const ts = now();
+  preset.rests.forEach((r, i) => {
+    restsArr.push({
+      id: genId(),
+      name: r.name,
+      temp_c: String(r.temp_c),
+      duration_min: String(r.duration_min),
+      rest_type: r.rest_type || 'rest',
+      sort_order: String(i),
+      created_at: ts,
+    });
+  });
 }
 
 async function createBatchFromRecipe(recipe) {
