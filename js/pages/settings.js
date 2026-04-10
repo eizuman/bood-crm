@@ -1,9 +1,10 @@
 // Bood CRM — Settings Page
 import { getSettings, setSetting, initializeSheets, exportAllData, importAllData, invalidateAll } from '../sheets.js';
-import { showToast, showLoading, showError, pageHeader } from '../ui.js';
+import { showToast, showLoading, showError, pageHeader, showModal, closeModal } from '../ui.js';
 import t from '../i18n.js';
 import { SPREADSHEET_ID } from '../config.js';
 import { escHtml } from '../utils.js';
+import { loadCatalog, SUPPORTED_COUNTRIES, getCatalogCount } from '../catalog.js';
 
 export async function renderSettings(container) {
   showLoading(container);
@@ -69,6 +70,7 @@ export async function renderSettings(container) {
                 ↗ ${t('open_sheet')}
               </a>
               <button class="btn btn-primary" id="btn-init-sheets">${t('init_sheets')}</button>
+              <button class="btn btn-secondary" id="btn-load-catalog">📦 Загрузить каталог</button>
             </div>
           </div>
         </div>
@@ -118,6 +120,47 @@ export async function renderSettings(container) {
         btn.disabled = false;
         btn.textContent = t('init_sheets');
       }
+    });
+
+    // Load catalog
+    container.querySelector('#btn-load-catalog')?.addEventListener('click', () => {
+      const countryOpts = SUPPORTED_COUNTRIES.map(c =>
+        `<option value="${escHtml(c.code)}">${escHtml(c.label)}</option>`
+      ).join('');
+      showModal('Загрузить стандартный каталог', `
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">Страна / рынок</label>
+            <select class="form-control" id="catalog-country">${countryOpts}</select>
+          </div>
+          <p class="form-hint">
+            Будут добавлены популярные ингредиенты для пивоварения и дистилляции
+            со справочными ценами для выбранного рынка.<br>
+            Уже существующие компоненты (по названию) пропускаются.
+          </p>
+        </div>
+      `, [
+        { label: 'Отмена', class: 'btn-secondary', action: 'cancel', onClick: closeModal },
+        { label: 'Загрузить', class: 'btn-primary', action: 'save', onClick: async (overlay) => {
+          const country = overlay.querySelector('#catalog-country').value;
+          const btn = overlay.querySelector('[data-action=save]');
+          btn.disabled = true;
+          btn.textContent = 'Загружаю...';
+          try {
+            const { added, skipped } = await loadCatalog(country);
+            closeModal();
+            if (added > 0) {
+              showToast(`Добавлено ${added} компонентов${skipped ? `, пропущено ${skipped} (уже существуют)` : ''}`);
+            } else {
+              showToast('Все компоненты каталога уже существуют', 'info');
+            }
+          } catch (e) {
+            showToast(e.message, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Загрузить';
+          }
+        }},
+      ]);
     });
 
     // Export JSON
