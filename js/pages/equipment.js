@@ -92,6 +92,7 @@ function _render(container) {
     { label: 'Стоимость', render: r => formatCurrency(r.purchase_price, settings.currency) },
     { label: 'Заметки', render: r => `<span class="text-muted text-sm">${escHtml(r.notes || '')}</span>` },
     { label: '', render: r => `
+      <button class="btn btn-sm btn-secondary btn-edit" data-id="${r.id}">✎</button>
       <button class="btn btn-sm btn-secondary btn-sell" data-id="${r.id}">Продать / Списать</button>
     `},
   ];
@@ -107,6 +108,9 @@ function _render(container) {
     { label: 'Покупка', render: r => formatCurrency(r.purchase_price, settings.currency) },
     { label: 'Продажа', render: r => r.sale_price ? formatCurrency(r.sale_price, settings.currency) : '—' },
     { label: 'Дата выбытия', render: r => formatDate(r.sale_date) },
+    { label: '', render: r => `
+      <button class="btn btn-sm btn-secondary btn-edit" data-id="${r.id}">✎</button>
+    `},
   ];
 
   renderTable(container.querySelector('#active-table'), cols, inUse, {
@@ -120,6 +124,13 @@ function _render(container) {
   }
 
   container.querySelector('#btn-add-equipment')?.addEventListener('click', () => showAddForm(container));
+
+  container.querySelectorAll('.btn-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = equipment.find(e => e.id === btn.dataset.id);
+      if (item) showEditForm(item, container);
+    });
+  });
 
   container.querySelectorAll('.btn-sell').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -178,6 +189,46 @@ function showAddForm(pageContainer) {
         }
         closeModal();
         showToast(`${data.name} добавлено`);
+        await renderEquipment(pageContainer);
+      } catch (e) { showToast(e.message, 'error'); }
+    }},
+  ]);
+}
+
+function showEditForm(item, pageContainer) {
+  const catOpts = CATEGORIES.map(c => ({ value: c.value, label: c.label }));
+
+  const html = `
+    <form id="equipment-form" class="form-grid">
+      ${formField('Название', textInput('name', item.name || ''), '', true)}
+      ${formField('Категория', selectInput('category', catOpts, item.category || 'other'))}
+      <div class="form-row-2">
+        ${formField('Стоимость покупки (руб)', numberInput('purchase_price', item.purchase_price || ''), '', true)}
+        ${formField('Дата покупки', `<input type="date" name="purchase_date" class="form-control" value="${item.purchase_date || ''}">`)}
+      </div>
+      ${formField('Заметки', textareaInput('notes', item.notes || ''))}
+    </form>
+  `;
+
+  showModal('Редактировать оборудование', html, [
+    { label: t('cancel'), class: 'btn-secondary', action: 'cancel', onClick: closeModal },
+    { label: t('save'), class: 'btn-primary', action: 'save', onClick: async (overlay) => {
+      const data = collectForm(overlay.querySelector('#equipment-form'));
+      if (!data.name?.trim()) { showToast('Введите название', 'warning'); return; }
+
+      try {
+        const ts = now();
+        await updateRow('Equipment', item.id, {
+          ...item,
+          name: data.name,
+          category: data.category,
+          purchase_price: data.purchase_price,
+          purchase_date: data.purchase_date || item.purchase_date,
+          notes: data.notes || '',
+          updated_at: ts,
+        });
+        closeModal();
+        showToast('Сохранено');
         await renderEquipment(pageContainer);
       } catch (e) { showToast(e.message, 'error'); }
     }},

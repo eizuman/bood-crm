@@ -50,6 +50,51 @@ export async function renderDashboard(container) {
       ['fermenting','packaging','done'].includes(b.status)
     ).length;
 
+    // 7. CAPEX & Break-even
+    const equipmentMovements = moneyLedger.filter(r =>
+      r.movement_type === 'equipment_purchase' || r.movement_type === 'equipment_sale'
+    );
+    const capexInvested = equipmentMovements
+      .filter(r => r.movement_type === 'equipment_purchase')
+      .reduce((s, r) => s + Math.abs(parseFloat(r.amount_signed || 0)), 0);
+    const capexRecovered = equipmentMovements
+      .filter(r => r.movement_type === 'equipment_sale')
+      .reduce((s, r) => s + parseFloat(r.amount_signed || 0), 0);
+    const netCapex = capexInvested - capexRecovered;
+
+    // Operational flow = everything except equipment movements
+    const operationalFlow = moneyLedger
+      .filter(r => r.movement_type !== 'equipment_purchase' && r.movement_type !== 'equipment_sale')
+      .reduce((s, r) => s + parseFloat(r.amount_signed || 0), 0);
+
+    // How much of CAPEX is covered by operational surplus
+    const coverageAmount = Math.max(0, operationalFlow);
+    const remaining = Math.max(0, netCapex - coverageAmount);
+    const coveragePct = netCapex > 0 ? Math.min(100, (coverageAmount / netCapex) * 100) : 100;
+
+    // Project break-even date based on avg monthly operational flow
+    let breakEvenProjection = null;
+    if (remaining > 0 && operationalFlow > 0) {
+      // Find first equipment purchase date to measure elapsed time
+      const firstEquipDate = equipmentMovements
+        .filter(r => r.movement_type === 'equipment_purchase')
+        .map(r => new Date(r.created_at))
+        .sort((a, b) => a - b)[0];
+      if (firstEquipDate) {
+        const monthsElapsed = Math.max(1,
+          (Date.now() - firstEquipDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+        );
+        const monthlyRate = operationalFlow / monthsElapsed;
+        if (monthlyRate > 0) {
+          const monthsLeft = remaining / monthlyRate;
+          const breakEvenDate = new Date(Date.now() + monthsLeft * 30.44 * 24 * 60 * 60 * 1000);
+          breakEvenProjection = { monthsLeft: Math.round(monthsLeft), date: breakEvenDate, monthlyRate };
+        }
+      }
+    } else if (remaining <= 0 && netCapex > 0) {
+      breakEvenProjection = { done: true };
+    }
+
     // ── Recent Batches ────────────────────────────────────────────────────────
     const recentBatches = [...batches]
       .filter(b => b.is_active !== 'FALSE')
@@ -77,10 +122,46 @@ export async function renderDashboard(container) {
       <div class="kpi-grid">
         ${kpiCard(t('hobby_net_cash'), formatCurrency(hobbyCash, settings.currency), 'Все приходы минус расходы', hobbyCash >= 0 ? 'var(--success)' : 'var(--error)')}
         ${kpiCard(t('profit_vs_cogs'), formatCurrency(profit, settings.currency), `Выручка: ${formatCurrency(salesRevenue, settings.currency)}`, profit >= 0 ? 'var(--success)' : 'var(--error)')}
+        ${kpiCard('Капекс (нетто)', formatCurrency(netCapex, settings.currency), `Вложено: ${formatCurrency(capexInvested, settings.currency)} / возвращено: ${formatCurrency(capexRecovered, settings.currency)}`, 'var(--accent)')}
         ${kpiCard(t('batches_this_month'), String(batchesThisMonth), 'Новых партий в этом месяце')}
         ${kpiCard(t('negative_stock'), String(negativeStock.length), 'Компонентов с дефицитом', negativeStock.length > 0 ? 'var(--error)' : '')}
         ${kpiCard(t('customer_debt'), formatCurrency(customerDebt, settings.currency), 'Суммарный долг клиентов', customerDebt > 0 ? 'var(--warning)' : '')}
-        ${kpiCard(t('batches_to_post'), String(batchesToPost), 'Ожидают проводки', batchesToPost > 0 ? 'var(--warning)' : '')}
+      </div>
+
+      <div class="section-card" style="margin-bottom:24px">
+        <div class="section-card-header"><h3>Окупаемость оборудования</h3></div>
+        <div class="section-card-body">
+          ${netCapex <= 0 ? '<p class="text-muted">Данных о CAPEX нет.</p>' : `
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
+              <div>
+                <div class="text-muted text-sm" style="margin-bottom:4px">Вложено в оборудование</div>
+                <div style="font-size:1.2em;font-weight:600">${formatCurrency(netCapex, settings.currency)}</div>
+              </div>
+              <div>
+                <div class="text-muted text-sm" style="margin-bottom:4px">Покрыто операционным потоком</div>
+                <div style="font-size:1.2em;font-weight:600;color:var(--success)">${formatCurrency(coverageAmount, settings.currency)}</div>
+              </div>
+              <div>
+                <div class="text-muted text-sm" style="margin-bottom:4px">Осталось окупить</div>
+                <div style="font-size:1.2em;font-weight:600;color:${remaining > 0 ? 'var(--error)' : 'var(--success)'}">${formatCurrency(remaining, settings.currency)}</div>
+              </div>
+            </div>
+            <div style="background:var(--bg-secondary);border-radius:8px;height:12px;overflow:hidden;margin-bottom:12px">
+              <div style="height:100%;width:${coveragePct.toFixed(1)}%;background:var(--success);border-radius:8px;transition:width 0.5s"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="text-muted text-sm">${coveragePct.toFixed(1)}% окупаемости</span>
+              <span class="text-sm">
+                ${breakEvenProjection?.done
+                  ? '<span style="color:var(--success);font-weight:600">Оборудование окупилось!</span>'
+                  : breakEvenProjection
+                    ? `Прогноз окупаемости: <strong>${breakEvenProjection.date.toLocaleDateString('ru-RU', {month:'long',year:'numeric'})}</strong> (~${breakEvenProjection.monthsLeft} мес.) · ${formatCurrency(Math.round(breakEvenProjection.monthlyRate), settings.currency)}/мес.`
+                    : '<span class="text-muted">Недостаточно данных для прогноза</span>'
+                }
+              </span>
+            </div>
+          `}
+        </div>
       </div>
 
       <div class="dashboard-grid">

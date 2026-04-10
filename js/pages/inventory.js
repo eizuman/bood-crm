@@ -173,20 +173,18 @@ function showPurchaseForm(pageContainer) {
       </div>
       <div class="form-row-2">
         <div class="form-field">
-          <label class="form-label">Количество <span class="text-danger">*</span></label>
-          <div style="display:flex;align-items:center;gap:8px">
-            <input type="number" name="qty" class="form-control" min="0.001" step="any" placeholder="0">
-            <span id="qty-unit" style="min-width:32px;color:var(--text-muted);font-size:0.9em">—</span>
-          </div>
+          <label class="form-label">Количество <span class="text-danger">*</span> <span id="qty-unit" style="color:var(--text-muted);font-weight:400"></span></label>
+          <input type="number" name="qty" class="form-control" min="0.001" step="any" placeholder="напр. 5000">
         </div>
         <div class="form-field">
-          <label class="form-label" id="price-label">Цена за ед. (руб) <span class="text-danger">*</span></label>
-          <input type="number" name="unit_cost" class="form-control" min="0" step="any" placeholder="0">
+          <label class="form-label">Сумма за покупку (руб) <span class="text-danger">*</span></label>
+          <input type="number" name="total_paid" class="form-control" min="0" step="any" placeholder="напр. 350">
         </div>
       </div>
       <div class="form-field">
-        <label class="form-label">Итого</label>
-        <input type="text" class="form-control" id="total-display" readonly placeholder="0 ₽">
+        <label class="form-label">Цена за единицу</label>
+        <input type="text" class="form-control" id="unit-cost-display" readonly placeholder="рассчитается автоматически" style="color:var(--text-muted)">
+        <input type="hidden" name="unit_cost" id="unit-cost-hidden">
       </div>
       ${formField('Поставщик', textInput('supplier', ''))}
       ${formField('Дата', `<input type="date" name="purchase_date" class="form-control" value="${new Date().toISOString().slice(0, 10)}">`)}
@@ -201,24 +199,27 @@ function showPurchaseForm(pageContainer) {
       const data = collectForm(form);
       if (!data.component_id) { showToast('Выберите компонент', 'warning'); return; }
       if (!data.qty || parseFloat(data.qty) <= 0) { showToast('Укажите количество', 'warning'); return; }
-      if (!data.unit_cost) { showToast('Укажите цену', 'warning'); return; }
+      if (!data.total_paid || parseFloat(data.total_paid) < 0) { showToast('Укажите сумму за покупку', 'warning'); return; }
+
+      const qty = parseFloat(data.qty);
+      const totalPaid = parseFloat(data.total_paid);
+      const unitCost = qty > 0 ? totalPaid / qty : 0;
 
       try {
         const comp = components.find(c => c.id === data.component_id);
         const ts = now();
         const inventoryId = genId();
         const moneyId = genId();
-        const totalCost = parseFloat(data.qty) * parseFloat(data.unit_cost);
         const notes = [data.supplier, data.notes].filter(Boolean).join(' | ');
 
         await appendRow('Inventory', {
           id: inventoryId,
           component_id: data.component_id,
-          qty_delta: data.qty,
+          qty_delta: String(qty),
           movement_type: 'purchase',
           ref_type: 'purchase',
           ref_id: inventoryId,
-          unit_cost: data.unit_cost,
+          unit_cost: String(unitCost),
           notes,
           created_at: data.purchase_date ? new Date(data.purchase_date).toISOString() : ts,
         });
@@ -226,43 +227,45 @@ function showPurchaseForm(pageContainer) {
         await appendRow('MoneyLedger', {
           id: moneyId,
           customer_id: '',
-          amount_signed: String(-totalCost),
+          amount_signed: String(-totalPaid),
           movement_type: 'purchase_expense',
           ref_type: 'inventory',
           ref_id: inventoryId,
-          notes: `Закупка: ${comp?.name || ''} ${data.qty} ${comp?.unit || ''} × ${data.unit_cost} руб`,
+          notes: `Закупка: ${comp?.name || ''} ${qty} ${comp?.unit || ''} — ${totalPaid} руб`,
           created_at: ts,
         });
 
         closeModal();
-        showToast(`Закупка ${comp?.name}: ${data.qty} ${comp?.unit || ''}`);
+        showToast(`Закупка ${comp?.name}: ${qty} ${comp?.unit || ''}`);
         await renderInventory(pageContainer);
       } catch (e) { showToast(e.message, 'error'); }
     }},
   ]);
 
-  // Update unit label and price label when component changes
-  function updateUnitLabels(compId) {
+  function recalc() {
+    const compId = overlay.querySelector('#purchase-component')?.value;
     const comp = components.find(c => c.id === compId);
-    const unit = comp?.unit || '—';
-    const qtyUnit = overlay.querySelector('#qty-unit');
-    const priceLabel = overlay.querySelector('#price-label');
-    if (qtyUnit) qtyUnit.textContent = unit;
-    if (priceLabel) priceLabel.innerHTML = `Цена за ${escHtml(unit)} (руб) <span class="text-danger">*</span>`;
-  }
-
-  overlay.querySelector('#purchase-component')?.addEventListener('change', e => {
-    updateUnitLabels(e.target.value);
-    updateTotal();
-  });
-
-  function updateTotal() {
+    const unit = comp?.unit || '';
     const qty = parseFloat(overlay.querySelector('[name=qty]')?.value) || 0;
-    const cost = parseFloat(overlay.querySelector('[name=unit_cost]')?.value) || 0;
-    const total = overlay.querySelector('#total-display');
-    if (total) total.value = formatCurrency(qty * cost, settings.currency);
+    const total = parseFloat(overlay.querySelector('[name=total_paid]')?.value) || 0;
+
+    const qtyUnitEl = overlay.querySelector('#qty-unit');
+    if (qtyUnitEl) qtyUnitEl.textContent = unit ? `(${unit})` : '';
+
+    const display = overlay.querySelector('#unit-cost-display');
+    const hidden = overlay.querySelector('#unit-cost-hidden');
+    if (qty > 0 && total > 0) {
+      const unitCost = total / qty;
+      const formatted = `${unitCost.toLocaleString('ru-RU', { maximumFractionDigits: 4 })} ₽ / ${unit || 'ед'}`;
+      if (display) display.value = formatted;
+      if (hidden) hidden.value = String(unitCost);
+    } else {
+      if (display) display.value = '';
+      if (hidden) hidden.value = '';
+    }
   }
 
-  overlay.querySelector('[name=qty]')?.addEventListener('input', updateTotal);
-  overlay.querySelector('[name=unit_cost]')?.addEventListener('input', updateTotal);
+  overlay.querySelector('#purchase-component')?.addEventListener('change', recalc);
+  overlay.querySelector('[name=qty]')?.addEventListener('input', recalc);
+  overlay.querySelector('[name=total_paid]')?.addEventListener('input', recalc);
 }
