@@ -8,7 +8,12 @@ import { escHtml } from '../utils.js';
 export async function renderSettings(container) {
   showLoading(container);
   try {
-    const settings = await getSettings();
+    let settings;
+    try {
+      settings = await getSettings();
+    } catch (_) {
+      settings = {};
+    }
     container.innerHTML = `
       ${pageHeader(t('settings'))}
       <div class="settings-grid">
