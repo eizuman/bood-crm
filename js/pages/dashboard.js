@@ -22,11 +22,13 @@ export async function renderDashboard(container) {
     // 1. Hobby Net Cash = SUM(MoneyLedger.amount_signed)
     const hobbyCash = moneyLedger.reduce((s, r) => s + parseFloat(r.amount_signed || 0), 0);
 
-    // 2. Profit vs COGS = posted sales revenue - frozen COGS
-    const postedSales = sales.filter(s => s.status === 'posted');
+    // 2. Revenue & COGS
+    const postedSales = sales.filter(s => s.status === 'posted' && s.sale_type !== 'gift');
     const salesRevenue = postedSales.reduce((s, r) => s + parseFloat(r.total_amount || 0), 0);
+    const giftCount = sales.filter(s => s.status === 'posted' && s.sale_type === 'gift').length;
     const frozenCOGS = batches.filter(b => b.cogs_snapshot)
       .reduce((s, b) => { try { return s + JSON.parse(b.cogs_snapshot).total; } catch { return s; } }, 0);
+    const hasCOGS = frozenCOGS > 0;
     const profit = salesRevenue - frozenCOGS;
 
     // 3. Batches this month
@@ -67,24 +69,28 @@ export async function renderDashboard(container) {
       .filter(d => !isNaN(d))
       .sort((a, b) => a - b)[0];
 
-    // Operational flow = MoneyLedger excluding equipment movements
-    // (equipment_purchase in MoneyLedger may exist for manually-added items — exclude to avoid double-counting)
-    const operationalFlow = moneyLedger
+    // Operational income = paid sales revenue (best proxy for hobby income)
+    // + deposits from MoneyLedger - ingredient purchase expenses
+    const mlOperational = moneyLedger
       .filter(r => r.movement_type !== 'equipment_purchase' && r.movement_type !== 'equipment_sale')
       .reduce((s, r) => s + parseFloat(r.amount_signed || 0), 0);
+    // Use sales revenue as income if it's larger than MoneyLedger flow
+    // (handles case where historical sales weren't added to MoneyLedger)
+    const operationalIncome = Math.max(salesRevenue, mlOperational > 0 ? mlOperational : 0) +
+      Math.min(0, mlOperational); // add any negative operational flows (purchase expenses)
 
-    // How much of CAPEX is covered by operational surplus
-    const coverageAmount = Math.max(0, operationalFlow);
+    // How much of CAPEX is covered by operational income
+    const coverageAmount = Math.max(0, operationalIncome);
     const remaining = Math.max(0, netCapex - coverageAmount);
     const coveragePct = netCapex > 0 ? Math.min(100, (coverageAmount / netCapex) * 100) : 100;
 
-    // Project break-even date based on avg monthly operational flow
+    // Project break-even based on avg monthly income since first equipment purchase
     let breakEvenProjection = null;
-    if (remaining > 0 && firstEquipDate) {
+    if (remaining > 0 && firstEquipDate && coverageAmount > 0) {
       const monthsElapsed = Math.max(1,
         (Date.now() - firstEquipDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)
       );
-      const monthlyRate = operationalFlow / monthsElapsed;
+      const monthlyRate = coverageAmount / monthsElapsed;
       if (monthlyRate > 0) {
         const monthsLeft = remaining / monthlyRate;
         const breakEvenDate = new Date(Date.now() + monthsLeft * 30.44 * 24 * 60 * 60 * 1000);
@@ -119,9 +125,19 @@ export async function renderDashboard(container) {
       ${pageHeader('Обзор')}
 
       <div class="kpi-grid">
-        ${kpiCard(t('hobby_net_cash'), formatCurrency(hobbyCash, settings.currency), 'Все приходы минус расходы', hobbyCash >= 0 ? 'var(--success)' : 'var(--error)')}
-        ${kpiCard(t('profit_vs_cogs'), formatCurrency(profit, settings.currency), `Выручка: ${formatCurrency(salesRevenue, settings.currency)}`, profit >= 0 ? 'var(--success)' : 'var(--error)')}
-        ${kpiCard('Капекс (нетто)', formatCurrency(netCapex, settings.currency), `Вложено: ${formatCurrency(capexInvested, settings.currency)} / возвращено: ${formatCurrency(capexRecovered, settings.currency)}`, 'var(--accent)')}
+        ${kpiCard('Баланс кассы', formatCurrency(hobbyCash, settings.currency),
+          'Депозиты и расходы из MoneyLedger',
+          hobbyCash >= 0 ? 'var(--success)' : 'var(--error)')}
+        ${kpiCard(
+          hasCOGS ? 'Прибыль (за вычетом себест.)' : 'Выручка от продаж',
+          formatCurrency(hasCOGS ? profit : salesRevenue, settings.currency),
+          hasCOGS
+            ? `COGS: ${formatCurrency(frozenCOGS, settings.currency)}`
+            : `${postedSales.length} продаж · ${giftCount} подарков`,
+          (hasCOGS ? profit : salesRevenue) >= 0 ? 'var(--success)' : 'var(--error)')}
+        ${kpiCard('Капекс (нетто)', formatCurrency(netCapex, settings.currency),
+          `Вложено: ${formatCurrency(capexInvested, settings.currency)} · возвращено: ${formatCurrency(capexRecovered, settings.currency)}`,
+          'var(--accent)')}
         ${kpiCard(t('batches_this_month'), String(batchesThisMonth), 'Новых партий в этом месяце')}
         ${kpiCard(t('negative_stock'), String(negativeStock.length), 'Компонентов с дефицитом', negativeStock.length > 0 ? 'var(--error)' : '')}
         ${kpiCard(t('customer_debt'), formatCurrency(customerDebt, settings.currency), 'Суммарный долг клиентов', customerDebt > 0 ? 'var(--warning)' : '')}
