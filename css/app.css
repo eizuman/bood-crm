@@ -541,6 +541,7 @@ select.form-control {
   max-height: none;
   border-radius: var(--radius-lg);
 }
+.modal-overlay.modal-fullscreen .modal-body { padding: 12px 16px; }
 
 .modal {
   background: var(--bg-secondary);
@@ -716,6 +717,38 @@ body.modal-open { overflow: hidden; }
 }
 .recipe-editor-grid .section-card { margin-bottom: 0; }
 .recipe-editor-grid .section-card-header h4 { font-size: 13px; margin: 0; }
+
+/* Make section cards more compact inside the grid */
+.recipe-editor-grid .section-card-body { padding: 10px 12px; }
+.recipe-editor-grid .form-group { margin-bottom: 8px; }
+.recipe-editor-grid .form-label { font-size: 11px; margin-bottom: 3px; }
+.recipe-editor-grid .form-control { font-size: 13px; padding: 5px 8px; height: 32px; }
+.recipe-editor-grid textarea.form-control { height: auto; }
+.recipe-editor-grid .ingredient-row { margin-bottom: 4px; }
+.recipe-editor-grid h4 { font-size: 12px; }
+
+/* Stats display for ABV/IBU/EBC */
+.recipe-stat-block {
+  text-align: center;
+  padding: 6px 4px;
+}
+.recipe-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+.recipe-stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.recipe-stat-target {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 .recipe-view-nav {
   display: flex;
   gap: 6px;

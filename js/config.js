@@ -17,6 +17,7 @@ export const SHEET_NAMES = {
   MONEY_LEDGER: 'MoneyLedger',
   EQUIPMENT: 'Equipment',
   SETTINGS: 'Settings',
+  BREWING_PROFILES: 'BrewingProfiles',
 };
 
 export const SHEET_HEADERS = {
@@ -31,6 +32,7 @@ export const SHEET_HEADERS = {
   MoneyLedger: ['id','customer_id','amount_signed','movement_type','ref_type','ref_id','notes','created_at'],
   Equipment: ['id','name','category','purchase_price','purchase_date','status','sale_price','sale_date','notes','is_active','created_at','updated_at'],
   Settings: ['key','value','updated_at'],
+  BrewingProfiles: ['id','name','type','system_efficiency','grain_absorption','boiloff_rate_pct','wort_shrinkage_pct','kettle_loss_l','fermenter_loss_l','kettle_volume_l','still_type','column_diameter_mm','packing_type','distillation_speed_lph','theoretical_plates','heads_pct','tails_pct','notes','is_active','created_at','updated_at'],
 };
 
 export const DEFAULT_SETTINGS = {
