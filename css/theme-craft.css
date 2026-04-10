@@ -1,0 +1,487 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOOD CRM — Craft Theme
+   High-contrast dark, green accent, bold compact typography
+   All rules scoped to body.theme-craft
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variable overrides ────────────────────────────────────────────────── */
+body.theme-craft {
+  --bg-primary:   #090909;
+  --bg-secondary: #101010;
+  --bg-tertiary:  #161616;
+  --bg-hover:     #1C1C1C;
+
+  --accent-amber:       #22c55e;
+  --accent-amber-light: #4ade80;
+  --accent-copper:      #16a34a;
+  --accent-gold:        #86efac;
+
+  --text-primary:   #EEEEEE;
+  --text-secondary: #6E6E6E;
+  --text-muted:     #3A3A3A;
+
+  --border:        #1A1A1A;
+  --border-accent: rgba(34, 197, 94, 0.12);
+
+  --success: #22c55e;
+  --warning: #eab308;
+  --error:   #ef4444;
+  --info:    #3b82f6;
+
+  --radius:    3px;
+  --radius-lg: 5px;
+  --shadow:    0 8px 40px rgba(0, 0, 0, 0.85);
+  --transition: 0.14s ease;
+
+  font-size: 13px;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+body.theme-craft ::-webkit-scrollbar-track { background: #090909; }
+body.theme-craft ::-webkit-scrollbar-thumb { background: #1E1E1E; }
+body.theme-craft ::-webkit-scrollbar-thumb:hover { background: #2A2A2A; }
+
+/* ── Auth ──────────────────────────────────────────────────────────────────── */
+body.theme-craft .auth-card {
+  background: #101010;
+  border-color: #1A1A1A;
+}
+body.theme-craft .auth-title { color: #22c55e; }
+body.theme-craft .auth-desc  { color: #4E4E4E; }
+
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
+body.theme-craft .sidebar {
+  background: #070707;
+  border-right-color: #161616;
+}
+body.theme-craft .sidebar-logo {
+  border-bottom-color: #161616;
+  padding: 14px 16px;
+}
+body.theme-craft .nav-section-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: #282828;
+  padding: 14px 16px 4px;
+}
+body.theme-craft .nav-item {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 7px 16px;
+  color: #4A4A4A;
+  border-left-width: 2px;
+}
+body.theme-craft .nav-item:hover {
+  color: #EEEEEE;
+  background: #0E0E0E;
+}
+body.theme-craft .nav-item.active {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.05);
+  border-left-color: #22c55e;
+}
+body.theme-craft .nav-icon {
+  width: 18px;
+  font-size: 14px;
+  color: inherit;
+}
+body.theme-craft .nav-divider { background: #161616; margin: 6px 12px; }
+body.theme-craft .sidebar-footer { border-top-color: #161616; }
+body.theme-craft .user-info { color: #2C2C2C; font-size: 10px; }
+
+/* Nav icon accent colors per route */
+body.theme-craft .nav-item[data-route="/dashboard"] .nav-icon        { color: #6366f1; }
+body.theme-craft .nav-item[data-route="/recipes/beer"] .nav-icon     { color: #fb923c; }
+body.theme-craft .nav-item[data-route="/recipes/spirit"] .nav-icon   { color: #a78bfa; }
+body.theme-craft .nav-item[data-route="/batches"] .nav-icon          { color: #38bdf8; }
+body.theme-craft .nav-item[data-route="/distillation"] .nav-icon     { color: #f97316; }
+body.theme-craft .nav-item[data-route="/customers"] .nav-icon        { color: #f472b6; }
+body.theme-craft .nav-item[data-route="/sales"] .nav-icon            { color: #22c55e; }
+body.theme-craft .nav-item.active .nav-icon                          { color: #22c55e; }
+
+/* ── Main content ──────────────────────────────────────────────────────────── */
+body.theme-craft .main-inner {
+  padding: 14px 18px;
+}
+
+/* ── Page header ───────────────────────────────────────────────────────────── */
+body.theme-craft .page-title {
+  font-size: 17px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #EEEEEE;
+}
+body.theme-craft .page-header {
+  margin-bottom: 12px;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+body.theme-craft .btn {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-radius: 3px;
+  padding: 6px 14px;
+}
+body.theme-craft .btn-primary {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #000;
+}
+body.theme-craft .btn-primary:hover {
+  background: #4ade80;
+  border-color: #4ade80;
+}
+body.theme-craft .btn-secondary {
+  background: #131313;
+  border-color: #1E1E1E;
+  color: #555;
+}
+body.theme-craft .btn-secondary:hover {
+  background: #1A1A1A;
+  border-color: #2A2A2A;
+  color: #EEEEEE;
+}
+body.theme-craft .btn-danger {
+  background: transparent;
+  border-color: transparent;
+  color: #ef4444;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+body.theme-craft .btn-danger:hover { background: rgba(239, 68, 68, 0.08); }
+body.theme-craft .btn-sm  { padding: 4px 10px; font-size: 10px; }
+body.theme-craft .btn-xs  { padding: 2px 7px;  font-size: 10px; }
+body.theme-craft .btn-lg  { padding: 10px 22px; font-size: 12px; }
+
+/* ── Toolbar ───────────────────────────────────────────────────────────────── */
+body.theme-craft .toolbar { margin-bottom: 10px; }
+body.theme-craft .search-input {
+  background: #0D0D0D;
+  border-color: #1A1A1A;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 3px;
+}
+body.theme-craft .search-input:focus { border-color: #22c55e; }
+body.theme-craft .chip-filter {
+  background: #0F0F0F;
+  border-color: #1A1A1A;
+  color: #4A4A4A;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+body.theme-craft .chip-filter.active,
+body.theme-craft .chip-filter:hover {
+  border-color: #22c55e;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.06);
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────────────── */
+body.theme-craft .tabs-nav {
+  border-bottom-color: #1A1A1A;
+  margin-bottom: 12px;
+}
+body.theme-craft .tab-btn {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  padding: 8px 14px;
+  color: #3A3A3A;
+}
+body.theme-craft .tab-btn:hover  { color: #EEEEEE; }
+body.theme-craft .tab-btn.active {
+  color: #EEEEEE;
+  border-bottom-color: #22c55e;
+}
+
+/* ── Tables ────────────────────────────────────────────────────────────────── */
+body.theme-craft .data-table thead th {
+  background: #0C0C0C;
+  color: #303030;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  padding: 6px 10px;
+  border-bottom-color: #1A1A1A;
+}
+body.theme-craft .data-table tbody td {
+  padding: 7px 10px;
+  border-bottom-color: #131313;
+  font-size: 13px;
+  color: #CCCCCC;
+}
+body.theme-craft .data-table tbody tr:hover  { background: #131313; }
+body.theme-craft .data-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Section cards ─────────────────────────────────────────────────────────── */
+body.theme-craft .section-card {
+  background: #101010;
+  border: 1px solid #1A1A1A;
+  border-radius: 5px;
+}
+body.theme-craft .section-card + .section-card { margin-top: 8px; }
+body.theme-craft .section-card-header {
+  background: #0C0C0C;
+  border-bottom-color: #1A1A1A;
+  padding: 8px 12px;
+}
+body.theme-craft .section-card-header h3,
+body.theme-craft .section-card-header h4 {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: #CCCCCC;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+body.theme-craft .section-card-body { padding: 10px 12px; }
+body.theme-craft .section-card-body.p-0 { padding: 0; }
+
+/* ── KPI cards ─────────────────────────────────────────────────────────────── */
+body.theme-craft .kpi-grid { gap: 10px; margin-bottom: 14px; }
+body.theme-craft .kpi-card {
+  background: #101010;
+  border-color: #1A1A1A;
+  border-radius: 5px;
+  padding: 12px 16px;
+}
+body.theme-craft .kpi-card:hover { border-color: rgba(34, 197, 94, 0.2); }
+body.theme-craft .kpi-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: #333;
+  margin-bottom: 5px;
+}
+body.theme-craft .kpi-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #22c55e;
+}
+body.theme-craft .kpi-sub { font-size: 10px; color: #2E2E2E; }
+
+/* ── Forms ─────────────────────────────────────────────────────────────────── */
+body.theme-craft .form-grid  { gap: 8px; }
+body.theme-craft .form-field { gap: 3px; }
+body.theme-craft .form-label {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: #4A4A4A;
+}
+body.theme-craft .form-hint  { font-size: 10px; color: #2E2E2E; }
+body.theme-craft .form-row-2,
+body.theme-craft .form-row-3,
+body.theme-craft .form-row-4 { gap: 8px; }
+
+body.theme-craft .form-control {
+  background: #0C0C0C;
+  border-color: #1E1E1E;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #EEEEEE;
+  padding: 6px 10px;
+}
+body.theme-craft .form-control:focus {
+  border-color: #22c55e;
+  background: #0E0E0E;
+}
+body.theme-craft .form-control::placeholder { color: #2C2C2C; }
+body.theme-craft .form-control:disabled { opacity: 0.35; }
+body.theme-craft select.form-control {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='%234A4A4A'%3E%3Cpath d='M0 0l6 8 6-8z'/%3E%3C/svg%3E");
+}
+body.theme-craft .form-static {
+  background: #0C0C0C;
+  border-color: #1E1E1E;
+  color: #4A4A4A;
+  border-radius: 3px;
+}
+
+/* ── Alerts ────────────────────────────────────────────────────────────────── */
+body.theme-craft .alert-danger  { background: rgba(239, 68, 68, 0.07);  border-color: #ef4444; }
+body.theme-craft .alert-warning { background: rgba(234, 179, 8, 0.07);  border-color: #eab308; }
+body.theme-craft .alert-info    { background: rgba(59, 130, 246, 0.07); border-color: #3b82f6; }
+body.theme-craft .alert-success { background: rgba(34, 197, 94, 0.07);  border-color: #22c55e; }
+
+/* ── Modal ─────────────────────────────────────────────────────────────────── */
+body.theme-craft .modal-overlay { background: rgba(0, 0, 0, 0.85); }
+body.theme-craft .modal {
+  background: #101010;
+  border-color: #1C1C1C;
+  border-radius: 5px;
+}
+body.theme-craft .modal-header {
+  border-bottom-color: #1C1C1C;
+  padding: 12px 18px;
+}
+body.theme-craft .modal-title {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #EEEEEE;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+body.theme-craft .modal-close { color: #2E2E2E; font-size: 14px; }
+body.theme-craft .modal-close:hover { color: #EEEEEE; }
+body.theme-craft .modal-body  { padding: 14px 18px; }
+body.theme-craft .modal-footer {
+  border-top-color: #1C1C1C;
+  padding: 10px 18px;
+}
+body.theme-craft .modal-overlay.modal-fullscreen .modal-body { padding: 10px 14px; }
+
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+body.theme-craft .toast {
+  background: #101010;
+  border-color: #1C1C1C;
+  font-size: 12px;
+  border-radius: 3px;
+}
+
+/* ── Misc ──────────────────────────────────────────────────────────────────── */
+body.theme-craft .info-block {
+  background: #0C0C0C;
+  border-color: #1A1A1A;
+  border-radius: 3px;
+}
+body.theme-craft .posting-row { border-bottom-color: #161616; }
+body.theme-craft .badge-success { color: #22c55e; }
+body.theme-craft .badge-muted   { color: #2E2E2E; }
+body.theme-craft .onhand-positive { color: #22c55e; }
+body.theme-craft .settings-grid   { max-width: 680px; }
+
+/* ── Recipe cards ──────────────────────────────────────────────────────────── */
+body.theme-craft .recipe-card {
+  background: #101010;
+  border-color: #1A1A1A;
+  padding: 12px 16px;
+  border-radius: 5px;
+}
+body.theme-craft .recipe-card:hover { border-color: rgba(34, 197, 94, 0.22); }
+body.theme-craft .recipe-name  { font-size: 15px; font-weight: 700; }
+body.theme-craft .recipe-style { font-size: 11px; }
+body.theme-craft .stat-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #333;
+}
+body.theme-craft .stat-value { font-size: 13px; font-weight: 600; color: #CCCCCC; }
+
+/* ── Recipe view nav (RECIPE / COSTS buttons) ───────────────────────────────── */
+body.theme-craft .recipe-view-nav {
+  border-bottom-color: #1A1A1A;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+body.theme-craft .recipe-view-nav .btn {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 12px;
+  border-radius: 3px;
+}
+body.theme-craft .recipe-view-nav .btn-primary {
+  background: #EEEEEE;
+  border-color: #EEEEEE;
+  color: #000;
+}
+body.theme-craft .recipe-view-nav .btn-primary:hover {
+  background: #FFF;
+  border-color: #FFF;
+}
+body.theme-craft .recipe-view-nav .btn-secondary {
+  background: transparent;
+  border-color: transparent;
+  color: #3A3A3A;
+}
+body.theme-craft .recipe-view-nav .btn-secondary:hover {
+  color: #888;
+  background: transparent;
+}
+
+/* ── Recipe editor grid ────────────────────────────────────────────────────── */
+body.theme-craft .recipe-editor-grid {
+  gap: 8px;
+}
+body.theme-craft .recipe-editor-col { gap: 8px; }
+body.theme-craft .recipe-editor-grid .section-card-body { padding: 8px 10px; }
+body.theme-craft .recipe-editor-grid .form-control {
+  font-size: 12px;
+  padding: 4px 7px;
+  height: 26px;
+}
+body.theme-craft .recipe-editor-grid textarea.form-control { height: auto; }
+body.theme-craft .recipe-editor-grid .form-label { font-size: 9px; }
+body.theme-craft .recipe-editor-grid .ingredient-row { margin-bottom: 3px; }
+
+/* ── Recipe stat blocks (ABV / IBU / EBC) ──────────────────────────────────── */
+body.theme-craft .recipe-stat-value {
+  font-size: 30px;
+  font-weight: 800;
+}
+body.theme-craft .recipe-stat-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: #333;
+  margin-top: 3px;
+}
+body.theme-craft .recipe-stat-target {
+  font-size: 9px;
+  color: #2E2E2E;
+  margin-top: 1px;
+}
+
+/* ── Water chemistry ───────────────────────────────────────────────────────── */
+body.theme-craft .water-ions {
+  background: #0C0C0C;
+  border: 1px solid #181818;
+}
+body.theme-craft .water-ion .ion-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+body.theme-craft .water-salt-row select,
+body.theme-craft .water-salt-row input { border-radius: 3px; }
+
+/* ── Ingredient / mash rows ────────────────────────────────────────────────── */
+body.theme-craft .ingredient-row { margin-bottom: 3px; }
+body.theme-craft .mash-rest-row  { margin-bottom: 3px; }
+
+/* ── Dashboard ─────────────────────────────────────────────────────────────── */
+body.theme-craft .dashboard-grid { gap: 10px; }
+
+/* ── Mobile nav ────────────────────────────────────────────────────────────── */
+body.theme-craft .mobile-nav {
+  background: #0A0A0A;
+  border-top-color: #181818;
+}
+body.theme-craft .mobile-nav-item        { color: #2E2E2E; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+body.theme-craft .mobile-nav-item.active { color: #22c55e; border-top-color: #22c55e; }
+body.theme-craft .mobile-nav-icon        { font-size: 18px; }
+
+/* ── Loading / empty / error states ────────────────────────────────────────── */
+body.theme-craft .spinner { border-color: #1C1C1C; border-top-color: #22c55e; }
+body.theme-craft .loading-state,
+body.theme-craft .empty-state,
+body.theme-craft .error-state { color: #2E2E2E; }

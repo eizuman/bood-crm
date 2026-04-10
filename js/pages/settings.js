@@ -5,6 +5,7 @@ import t from '../i18n.js';
 import { SPREADSHEET_ID } from '../config.js';
 import { escHtml } from '../utils.js';
 import { loadCatalog, SUPPORTED_COUNTRIES, getCatalogCount } from '../catalog.js';
+import { THEMES, getTheme, applyTheme } from '../theme.js';
 
 export async function renderSettings(container) {
   showLoading(container);
@@ -52,6 +53,14 @@ export async function renderSettings(container) {
               <select class="form-control" data-key="language">
                 <option value="ru" ${settings.language === 'ru' ? 'selected' : ''}>Русский</option>
                 <option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Тема оформления</label>
+              <select class="form-control" id="theme-select">
+                ${Object.entries(THEMES).map(([k, label]) =>
+                  `<option value="${escHtml(k)}" ${getTheme() === k ? 'selected' : ''}>${escHtml(label)}</option>`
+                ).join('')}
               </select>
             </div>
           </div>
@@ -104,6 +113,12 @@ export async function renderSettings(container) {
           showToast(e.message, 'error');
         }
       });
+    });
+
+    // Theme switcher (localStorage only, instant)
+    container.querySelector('#theme-select')?.addEventListener('change', (e) => {
+      applyTheme(e.target.value);
+      showToast('Тема применена');
     });
 
     // Init sheets

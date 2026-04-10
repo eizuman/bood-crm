@@ -11,11 +11,15 @@
 
   <!-- Styles -->
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/theme-craft.css">
+
 
   <!-- Favicon inline -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230F0F0F'/><path d='M16 16 C17.5 11 23 10 23 16 C23 22 17.5 21 16 16 C14.5 11 9 10 9 16 C9 22 14.5 21 16 16 Z' fill='none' stroke='%234CAF50' stroke-width='2.2' stroke-linecap='round'/></svg>">
 </head>
 <body>
+<!-- Apply saved theme before first paint to avoid flash -->
+<script>(function(){var t=localStorage.getItem('bood-theme');if(t&&t!=='default')document.body.classList.add('theme-'+t);})();</script>
 
 <!-- ═══════ AUTH SCREEN ═══════════════════════════════════════════════════════ -->
 <div id="auth-screen" style="display:none">
@@ -50,29 +54,29 @@
 
     <div class="sidebar-nav">
       <a href="#/dashboard"    class="nav-item" data-route="/dashboard">
-        <span class="nav-icon">◆</span> Обзор
+        <span class="nav-icon">◈</span> Обзор
       </a>
 
       <div class="nav-section-label">Склад</div>
       <a href="#/components"   class="nav-item" data-route="/components">
-        <span class="nav-icon">⊞</span> Компоненты
+        <span class="nav-icon">◧</span> Компоненты
       </a>
       <a href="#/inventory"    class="nav-item" data-route="/inventory">
-        <span class="nav-icon">≡</span> Склад
+        <span class="nav-icon">▤</span> Склад
       </a>
 
       <div class="nav-section-label">Производство</div>
       <a href="#/recipes/beer" class="nav-item" data-route="/recipes/beer">
-        <span class="nav-icon">🍺</span> Рецепты (Пиво)
+        <span class="nav-icon">🍺</span> Рецепты пива
       </a>
       <a href="#/recipes/spirit" class="nav-item" data-route="/recipes/spirit">
-        <span class="nav-icon">🥃</span> Рецепты (Дистиллят)
+        <span class="nav-icon">🥃</span> Рецепты дистил.
       </a>
       <a href="#/batches"      class="nav-item" data-route="/batches">
-        <span class="nav-icon">⚗</span> Партии
+        <span class="nav-icon">◉</span> Партии
       </a>
       <a href="#/distillation" class="nav-item" data-route="/distillation">
-        <span class="nav-icon">♨</span> Дистилляция
+        <span class="nav-icon">🔥</span> Дистилляция
       </a>
 
       <div class="nav-section-label">CRM</div>
@@ -80,18 +84,18 @@
         <span class="nav-icon">◎</span> Клиенты
       </a>
       <a href="#/sales"        class="nav-item" data-route="/sales">
-        <span class="nav-icon">₽</span> Продажи
+        <span class="nav-icon">◈</span> Продажи
       </a>
 
       <div class="nav-divider"></div>
-      <a href="#/profiles" class="nav-item" data-route="/profiles">
-        <span class="nav-icon">⚙</span> Профили оборудования
+      <a href="#/profiles"     class="nav-item" data-route="/profiles">
+        <span class="nav-icon">▦</span> Профили оборуд.
       </a>
       <a href="#/equipment"    class="nav-item" data-route="/equipment">
-        <span class="nav-icon">🔧</span> Оборудование
+        <span class="nav-icon">◫</span> Оборудование
       </a>
       <a href="#/settings"     class="nav-item" data-route="/settings">
-        <span class="nav-icon">⚙</span> Настройки
+        <span class="nav-icon">◌</span> Настройки
       </a>
     </div>
 
@@ -142,6 +146,9 @@
   import { navigate, register, start, onNavigate } from './js/router.js';
   import { getSettings } from './js/sheets.js';
   import { setLanguage } from './js/i18n.js';
+  import { initTheme } from './js/theme.js';
+
+  initTheme(); // re-apply after module load (body script already did it, this normalises state)
 
   // Lazy page imports
   const pages = {
