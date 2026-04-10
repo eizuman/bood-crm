@@ -27,7 +27,7 @@ export const SHEET_HEADERS = {
   RecipeMashRests: ['id','recipe_id','sort_order','name','temp_c','duration_min','rest_type','created_at'],
   Batches: ['id','recipe_id','recipe_snapshot','name','type','status','brew_date','og','fg','abv','to_fermenter_l','packaged_l','package_date','kwh_used','labor_hours','brew_notes','ferment_notes','package_notes','brew_posted','brew_posted_at','packaging_posted','packaging_posted_at','cogs_snapshot','cogs_frozen_at','is_active','created_at','updated_at'],
   Customers: ['id','name','phone','email','notes','is_active','created_at','updated_at'],
-  Sales: ['id','customer_id','items_snapshot','status','total_amount','posted_at','notes','is_active','created_at','updated_at'],
+  Sales: ['id','customer_id','items_snapshot','status','total_amount','posted_at','notes','is_active','created_at','updated_at','sale_type'],
   MoneyLedger: ['id','customer_id','amount_signed','movement_type','ref_type','ref_id','notes','created_at'],
   Equipment: ['id','name','category','purchase_price','purchase_date','status','sale_price','sale_date','notes','is_active','created_at','updated_at'],
   Settings: ['key','value','updated_at'],

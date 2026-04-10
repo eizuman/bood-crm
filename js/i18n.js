@@ -74,6 +74,7 @@ const translations = {
     packaging_consume: 'Упаковка (расход)',
     packaging_produce: 'Упаковка (приход)',
     sale_out: 'Продажа',
+    gift_out: 'Подарок',
     return_in: 'Возврат',
     adjustment: 'Корректировка',
     new_purchase: 'Новая закупка',

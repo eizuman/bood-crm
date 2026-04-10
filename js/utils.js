@@ -34,6 +34,7 @@ export const MOVEMENT_COLORS = {
   packaging_consume:  '#6B7280',
   packaging_produce:  '#2563EB',
   sale_out:           '#F44336',
+  gift_out:           '#9C27B0',
   return_in:          '#4CAF50',
   adjustment:         '#9A8F7E',
   deposit:            '#059669',

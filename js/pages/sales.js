@@ -35,7 +35,10 @@ function _render(container) {
   const sorted = [...active].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
   container.innerHTML = `
-    ${pageHeader(t('sales'), `<button class="btn btn-primary" id="btn-new-sale">+ ${t('new_sale')}</button>`)}
+    ${pageHeader(t('sales'), `
+      <button class="btn btn-primary" id="btn-new-sale">+ Продажа</button>
+      <button class="btn btn-secondary" id="btn-new-gift" style="margin-left:8px">🎁 Подарок</button>
+    `)}
     <div id="sales-table"></div>
   `;
 
@@ -43,15 +46,22 @@ function _render(container) {
     { label: 'Дата', render: r => formatDate(r.created_at) },
     { label: t('customer'), render: r => {
       const c = customers.find(c => c.id === r.customer_id);
-      return escHtml(c?.name || '—');
+      const name = escHtml(c?.name || (r.sale_type === 'gift' ? '— без получателя —' : '—'));
+      return r.sale_type === 'gift'
+        ? `<span>🎁 ${name}</span>`
+        : name;
     }},
     { label: 'Позиции', render: r => {
       try {
         const items = JSON.parse(r.items_snapshot || '[]');
-        return `<span class="text-muted">${items.length} поз.</span>`;
+        const liters = items.reduce((s, i) => s + (parseFloat(i.qty) || 0), 0);
+        return `<span class="text-muted">${items.length} поз. · ${liters.toFixed(1)} л</span>`;
       } catch { return '—'; }
     }},
-    { label: 'Сумма', render: r => formatCurrency(r.total_amount, settings.currency) },
+    { label: 'Сумма', render: r => {
+      if (r.sale_type === 'gift') return `<span class="text-muted">Подарок</span>`;
+      return formatCurrency(r.total_amount, settings.currency);
+    }},
     { label: 'Статус', render: r => {
       const cls = r.status === 'posted' ? 'badge-success' : 'badge-muted';
       return `<span class="${cls}">${r.status === 'posted' ? '✓ Проведена' : '○ Черновик'}</span>`;
@@ -66,7 +76,8 @@ function _render(container) {
     emptyMessage: 'Нет продаж',
   });
 
-  container.querySelector('#btn-new-sale')?.addEventListener('click', () => showSaleForm(container));
+  container.querySelector('#btn-new-sale')?.addEventListener('click', () => showSaleForm(container, 'sale'));
+  container.querySelector('#btn-new-gift')?.addEventListener('click', () => showSaleForm(container, 'gift'));
 
   container.querySelectorAll('.btn-post-sale').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -83,7 +94,8 @@ function _render(container) {
   });
 }
 
-function showSaleForm(pageContainer) {
+function showSaleForm(pageContainer, saleType = 'sale') {
+  const isGift = saleType === 'gift';
   const custOpts = customers.filter(c => c.is_active !== 'FALSE').map(c => ({ value: c.id, label: c.name }));
   const productComps = components.filter(c => ['finished_beer','finished_spirit'].includes(c.type) && c.is_active !== 'FALSE');
 
@@ -92,28 +104,26 @@ function showSaleForm(pageContainer) {
   function renderLines() {
     const el = document.getElementById('sale-lines');
     if (!el) return;
-    el.innerHTML = lineItems.map((item, i) => {
-      const comp = components.find(c => c.id === item.component_id);
-      const onHand = calcOnHand(inventory, item.component_id);
-      return `
-        <div class="sale-line" data-idx="${i}">
-          <select class="form-control line-comp" data-idx="${i}">
-            ${productComps.map(c => `<option value="${c.id}" ${c.id===item.component_id?'selected':''}>${escHtml(c.name)} (${calcOnHand(inventory,c.id).toFixed(2)} ${c.unit})</option>`).join('')}
-          </select>
-          <input type="number" class="form-control line-qty" data-idx="${i}" value="${item.qty||''}" placeholder="Кол-во" step="0.01" style="width:90px">
+    el.innerHTML = lineItems.map((item, i) => `
+      <div class="sale-line" data-idx="${i}">
+        <select class="form-control line-comp" data-idx="${i}">
+          ${productComps.map(c => `<option value="${c.id}" ${c.id===item.component_id?'selected':''}>${escHtml(c.name)} (${calcOnHand(inventory,c.id).toFixed(2)} ${c.unit})</option>`).join('')}
+        </select>
+        <input type="number" class="form-control line-qty" data-idx="${i}" value="${item.qty||''}" placeholder="Кол-во (л/шт)" step="0.01" style="width:110px">
+        ${!isGift ? `
           <input type="number" class="form-control line-price" data-idx="${i}" value="${item.unit_price||''}" placeholder="Цена/ед" step="0.01" style="width:100px">
-          <span class="line-total text-muted" style="min-width:80px">${formatCurrency((parseFloat(item.qty)||0) * (parseFloat(item.unit_price)||0), settings.currency)}</span>
-          <button type="button" class="btn btn-sm btn-danger line-remove" data-idx="${i}">✕</button>
-        </div>
-      `;
-    }).join('') || '<p class="text-muted">Добавьте позиции</p>';
+          <span class="line-total text-muted" style="min-width:80px">${formatCurrency((parseFloat(item.qty)||0)*(parseFloat(item.unit_price)||0), settings.currency)}</span>
+        ` : '<span class="text-muted" style="min-width:80px;font-size:0.85em">бесплатно</span>'}
+        <button type="button" class="btn btn-sm btn-danger line-remove" data-idx="${i}">✕</button>
+      </div>
+    `).join('') || '<p class="text-muted">Добавьте позиции</p>';
 
-    // Update total
-    const total = lineItems.reduce((s, l) => s + (parseFloat(l.qty)||0) * (parseFloat(l.unit_price)||0), 0);
-    const totalEl = document.getElementById('sale-total');
-    if (totalEl) totalEl.textContent = formatCurrency(total, settings.currency);
+    if (!isGift) {
+      const total = lineItems.reduce((s,l) => s + (parseFloat(l.qty)||0)*(parseFloat(l.unit_price)||0), 0);
+      const totalEl = document.getElementById('sale-total');
+      if (totalEl) totalEl.textContent = formatCurrency(total, settings.currency);
+    }
 
-    // Attach line events
     el.querySelectorAll('.line-comp').forEach(sel => {
       sel.addEventListener('change', () => { lineItems[parseInt(sel.dataset.idx)].component_id = sel.value; renderLines(); });
     });
@@ -130,41 +140,58 @@ function showSaleForm(pageContainer) {
 
   const html = `
     <form id="sale-form" class="form-grid">
-      ${formField('Клиент', selectInput('customer_id', [{ value:'', label:'— выбрать —' }, ...custOpts], ''), '', true)}
-      <h4>Позиции</h4>
+      ${isGift ? `
+        <div class="alert alert-info" style="margin-bottom:8px">
+          🎁 Подарок — продукция спишется со склада, баланс клиента <strong>не изменится</strong>. Получатель необязателен.
+        </div>
+      ` : ''}
+      ${formField(
+        isGift ? 'Получатель (не обязательно)' : 'Клиент',
+        selectInput('customer_id', [{ value:'', label: isGift ? '— без получателя —' : '— выбрать —' }, ...custOpts], ''),
+        '', !isGift
+      )}
+      <h4 style="margin:8px 0 4px">Позиции</h4>
       <div id="sale-lines"></div>
-      <button type="button" class="btn btn-secondary" id="btn-add-line">+ Добавить позицию</button>
-      <div class="sale-total-row">
-        <strong>Итого: <span id="sale-total">0 ₽</span></strong>
-      </div>
+      <button type="button" class="btn btn-secondary" id="btn-add-line" style="margin-top:8px">+ Добавить позицию</button>
+      ${!isGift ? `
+        <div class="sale-total-row" style="margin-top:12px">
+          <strong>Итого: <span id="sale-total">0 ₽</span></strong>
+        </div>
+      ` : ''}
       ${formField(t('notes'), textareaInput('notes', ''))}
     </form>
   `;
 
-  const overlay = showModal(t('new_sale'), html, [
+  const overlay = showModal(isGift ? '🎁 Оформить подарок' : t('new_sale'), html, [
     { label: t('cancel'), class: 'btn-secondary', action: 'cancel', onClick: closeModal },
     { label: 'Создать черновик', class: 'btn-primary', action: 'save', onClick: async (overlay) => {
       const form = overlay.querySelector('#sale-form');
       const data = collectForm(form);
-      if (!data.customer_id) { showToast('Выберите клиента', 'warning'); return; }
+      if (!isGift && !data.customer_id) { showToast('Выберите клиента', 'warning'); return; }
       if (!lineItems.length) { showToast('Добавьте позиции', 'warning'); return; }
-      const total = lineItems.reduce((s,l) => s + (parseFloat(l.qty)||0)*(parseFloat(l.unit_price)||0), 0);
+      const total = isGift ? 0 : lineItems.reduce((s,l) => s + (parseFloat(l.qty)||0)*(parseFloat(l.unit_price)||0), 0);
       try {
         const itemsSnapshot = JSON.stringify(lineItems.map(l => ({
           component_id: l.component_id,
           name: components.find(c=>c.id===l.component_id)?.name || '?',
           qty: l.qty,
-          unit_price: l.unit_price,
+          unit_price: isGift ? '0' : (l.unit_price || '0'),
           refunded_qty: '0',
         })));
         await appendRow('Sales', {
-          id: genId(), customer_id: data.customer_id,
+          id: genId(),
+          customer_id: data.customer_id || '',
           items_snapshot: itemsSnapshot,
-          status: 'draft', total_amount: String(total),
-          notes: data.notes, is_active: 'TRUE',
-          created_at: now(), updated_at: now(),
+          status: 'draft',
+          total_amount: String(total),
+          notes: data.notes,
+          is_active: 'TRUE',
+          created_at: now(),
+          updated_at: now(),
+          sale_type: saleType,
         });
-        closeModal(); showToast('Продажа создана (черновик)');
+        closeModal();
+        showToast(isGift ? '🎁 Подарок создан (черновик)' : 'Продажа создана (черновик)');
         await renderSales(pageContainer);
       } catch (e) { showToast(e.message, 'error'); }
     }},
@@ -184,7 +211,13 @@ function showSaleForm(pageContainer) {
 }
 
 async function postSale(sale, pageContainer) {
-  showConfirm(t('confirm_post'), 'Продукция будет списана со склада, баланс клиента уменьшен', async () => {
+  const isGift = sale.sale_type === 'gift';
+  const customer = customers.find(c => c.id === sale.customer_id);
+  const confirmMsg = isGift
+    ? 'Продукция спишется со склада. Баланс клиента не изменится.'
+    : 'Продукция будет списана со склада, баланс клиента уменьшен.';
+
+  showConfirm(isGift ? '🎁 Провести подарок?' : t('confirm_post'), confirmMsg, async () => {
     try {
       const items = JSON.parse(sale.items_snapshot || '[]');
       const ts = now();
@@ -199,28 +232,32 @@ async function postSale(sale, pageContainer) {
       }
 
       // Write-off inventory
+      const recipientName = customer?.name || (isGift ? 'без получателя' : '?');
       const invRows = items.map(item => ({
         id: genId(), component_id: item.component_id,
         qty_delta: String(-Math.abs(parseFloat(item.qty)||0)),
-        movement_type: 'sale_out', ref_type: 'sale', ref_id: sale.id,
+        movement_type: isGift ? 'gift_out' : 'sale_out',
+        ref_type: 'sale', ref_id: sale.id,
         unit_cost: item.unit_price,
-        notes: `Продажа: ${customers.find(c=>c.id===sale.customer_id)?.name||'?'}`,
+        notes: isGift ? `Подарок: ${recipientName}` : `Продажа: ${recipientName}`,
         created_at: ts,
       }));
       await appendRows('Inventory', invRows);
 
-      // Charge customer
-      await appendRow('MoneyLedger', {
-        id: genId(), customer_id: sale.customer_id,
-        amount_signed: String(-parseFloat(sale.total_amount||0)),
-        movement_type: 'sale_charge', ref_type: 'sale', ref_id: sale.id,
-        notes: `Продажа #${sale.id.slice(0,8)}`, created_at: ts,
-      });
+      // Charge customer (only for regular sales, not gifts)
+      if (!isGift && sale.customer_id) {
+        await appendRow('MoneyLedger', {
+          id: genId(), customer_id: sale.customer_id,
+          amount_signed: String(-parseFloat(sale.total_amount||0)),
+          movement_type: 'sale_charge', ref_type: 'sale', ref_id: sale.id,
+          notes: `Продажа #${sale.id.slice(0,8)}`, created_at: ts,
+        });
+      }
 
       // Update sale
       await updateRow('Sales', sale.id, { ...sale, status: 'posted', posted_at: ts, updated_at: ts });
 
-      showToast(t('posted_ok'));
+      showToast(isGift ? '🎁 Подарок проведён' : t('posted_ok'));
       await renderSales(pageContainer);
     } catch (e) { showToast(e.message, 'error'); }
   });
@@ -234,7 +271,8 @@ function showSaleDetail(sale, pageContainer) {
   const html = `
     <div class="sale-detail">
       <div class="sale-meta">
-        <p><strong>Клиент:</strong> ${escHtml(customer?.name||'—')}</p>
+        ${sale.sale_type === 'gift' ? '<p><span style="color:var(--success)">🎁 Подарок</span> — баланс клиента не изменяется</p>' : ''}
+        <p><strong>${sale.sale_type === 'gift' ? 'Получатель' : 'Клиент'}:</strong> ${escHtml(customer?.name||'—')}</p>
         <p><strong>Дата:</strong> ${formatDateTime(sale.created_at)}</p>
         <p><strong>Статус:</strong> ${sale.status === 'posted' ? '✓ Проведена' : '○ Черновик'}</p>
         ${sale.posted_at ? `<p><strong>Дата проводки:</strong> ${formatDateTime(sale.posted_at)}</p>` : ''}
