@@ -197,8 +197,24 @@ function showRecipeEditor(recipe, pageContainer) {
         // Auto-calc ABV (always from stored SG values)
         if (['og_target','fg_target'].includes(el.name)) {
           const abv = calcABV(recipeData.og_target, recipeData.fg_target);
-          const abvEl = tabContent.querySelector('[name=abv_estimated]');
-          if (abvEl) { abvEl.value = abv; recipeData.abv_estimated = abv; }
+          recipeData.abv_estimated = abv;
+          const hiddenAbv = tabContent.querySelector('#inp-abv-estimated');
+          if (hiddenAbv) hiddenAbv.value = abv;
+          const statAbv = tabContent.querySelector('#stat-abv');
+          if (statAbv) statAbv.textContent = (abv || '—') + '%';
+        }
+        // Update IBU/EBC stat blocks from manual inputs
+        if (el.name === '_ibu_manual') {
+          recipeData.ibu_estimated = el.value;
+          const hiddenIbu = tabContent.querySelector('#inp-ibu-estimated');
+          if (hiddenIbu) hiddenIbu.value = el.value;
+          const statIbu = tabContent.querySelector('#stat-ibu');
+          if (statIbu) statIbu.textContent = el.value || '—';
+        }
+        if (el.name === '_ebc_manual') {
+          recipeData.ebc_estimated = el.value;
+          const statEbc = tabContent.querySelector('#stat-ebc');
+          if (statEbc) statEbc.textContent = el.value || '—';
         }
       });
     });
@@ -660,7 +676,27 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
               <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.1" style="background:var(--bg-secondary)">
             </div>
           </div>
-          <div class="form-row-4">
+          <!-- Stat blocks: ABV / IBU / EBC -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:8px 0 4px">
+            <div class="recipe-stat-block">
+              <div class="recipe-stat-value stat-abv" id="stat-abv">${escHtml(data.abv_estimated||calcABV(data.og_target,data.fg_target)||'—')}%</div>
+              <div class="recipe-stat-label">ABV</div>
+              ${selectedStyle?.abv ? `<div class="recipe-stat-target">${selectedStyle.abv[0]}–${selectedStyle.abv[1]}%</div>` : ''}
+            </div>
+            <div class="recipe-stat-block">
+              <div class="recipe-stat-value stat-ibu" id="stat-ibu">${escHtml(data.ibu_estimated||'—')}</div>
+              <div class="recipe-stat-label">IBU</div>
+              ${selectedStyle?.ibu ? `<div class="recipe-stat-target">${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</div>` : ''}
+            </div>
+            <div class="recipe-stat-block">
+              <div class="recipe-stat-value stat-ebc" id="stat-ebc">${escHtml(data.ebc_estimated||'—')}</div>
+              <div class="recipe-stat-label">EBC</div>
+              ${selectedStyle?.ebc ? `<div class="recipe-stat-target">${selectedStyle.ebc[0]}–${selectedStyle.ebc[1]}</div>` : ''}
+            </div>
+          </div>
+          <input type="hidden" name="abv_estimated" id="inp-abv-estimated" value="${escHtml(data.abv_estimated||calcABV(data.og_target,data.fg_target)||'')}">
+          <input type="hidden" name="ibu_estimated" id="inp-ibu-estimated" value="${escHtml(data.ibu_estimated||'')}">
+          <div class="form-row-2">
             <div class="form-group">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
                 <label class="form-label" style="margin:0">OG</label>
@@ -677,8 +713,10 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
               <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisplayVal))}" step="${fgUnit==='sg'?'0.001':'0.1'}" placeholder="${fgUnit==='sg'?'1.010':'2.6'}" data-unit="${fgUnit}">
               ${fgAlt ? `<div style="font-size:0.75em;color:var(--text-muted);margin-top:2px">${fgAlt}</div>` : ''}
             </div>
-            ${formField('ABV %', `<input type="number" name="abv_estimated" class="form-control" value="${escHtml(data.abv_estimated||calcABV(data.og_target, data.fg_target)||'')}" step="0.1">`)}
-            ${formField('IBU', `<input type="number" name="ibu_estimated" class="form-control" value="${escHtml(data.ibu_estimated||'')}" step="1">`)}
+          </div>
+          <div class="form-row-2">
+            ${formField('IBU (ручной)', `<input type="number" name="_ibu_manual" class="form-control" value="${escHtml(data.ibu_estimated||'')}" step="1" id="inp-ibu-manual">`)}
+            ${formField('EBC (ручной)', `<input type="number" name="_ebc_manual" class="form-control" value="${escHtml(data.ebc_estimated||'')}" step="1" id="inp-ebc-manual">`)}
           </div>
           ${formField('Описание', `<textarea name="description" class="form-control" rows="2">${escHtml(data.description||'')}</textarea>`)}
           <div class="form-group">

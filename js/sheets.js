@@ -9,6 +9,7 @@ const cache = {
   Components: null, Inventory: null, Recipes: null,
   RecipeIngredients: null, RecipeMashRests: null, Batches: null,
   Customers: null, Sales: null, MoneyLedger: null, Settings: null,
+  Equipment: null, BrewingProfiles: null,
   lastFetch: {},
 };
 const TTL = 5 * 60 * 1000; // 5 min
@@ -56,7 +57,9 @@ function parseRows(sheetName, values) {
 // ─── Core operations ──────────────────────────────────────────────────────────
 export async function getRows(sheetName, forceRefresh = false) {
   if (!forceRefresh && isCacheFresh(sheetName)) return cache[sheetName];
-  const range = `${sheetName}!A:${colLetter(SHEET_HEADERS[sheetName].length)}`;
+  const headers = SHEET_HEADERS[sheetName];
+  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const range = `${sheetName}!A:${colLetter(headers.length)}`;
   const data = await sheetsRequest(`/values/${encodeURIComponent(range)}`);
   const rows = parseRows(sheetName, data.values);
   cache[sheetName] = rows;
