@@ -701,6 +701,61 @@ body.modal-open { overflow: hidden; }
 
 /* ── Recipe Editor ─────────────────────────────────────────────────────────── */
 .recipe-editor-content { min-height: 400px; }
+
+/* Desktop 3-column grid layout */
+.recipe-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.recipe-editor-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.recipe-editor-grid .section-card { margin-bottom: 0; }
+.recipe-editor-grid .section-card-header h4 { font-size: 13px; margin: 0; }
+.recipe-view-nav {
+  display: flex;
+  gap: 6px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+.recipe-view-nav .btn { font-size: 12px; padding: 4px 14px; }
+
+@media (max-width: 1100px) {
+  .recipe-editor-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .recipe-editor-grid { grid-template-columns: 1fr; }
+}
+
+/* Water chemistry */
+.water-salt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.water-salt-row select { flex: 1; }
+.water-salt-row input[type=number] { width: 72px; }
+.water-ions {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-top: 10px;
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  font-size: 11px;
+}
+.water-ion { text-align: center; }
+.water-ion .ion-label { color: var(--text-muted); display: block; }
+.water-ion .ion-val { font-weight: 600; }
+
 .ingredient-row {
   display: flex;
   align-items: center;
