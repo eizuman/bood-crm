@@ -1,7 +1,7 @@
 // Bood CRM — Inventory Page
-import { getRows, appendRow, updateRow, genId, now, getSettings } from '../sheets.js';
+import { getRows, appendRow, updateRow, deleteRow, genId, now, getSettings } from '../sheets.js';
 import { calcOnHand } from '../utils.js';
-import { showModal, closeModal, showToast, showLoading, showError,
+import { showModal, closeModal, showToast, showConfirm, showLoading, showError,
   renderTable, createTypeChip, createMovementChip, pageHeader,
   formField, numberInput, textInput, textareaInput, collectForm } from '../ui.js';
 import t from '../i18n.js';
@@ -135,10 +135,10 @@ function _render(container) {
       return cost ? formatCurrency(cost, settings.currency) : '—';
     }},
     { label: 'Заметки', render: r => `<span class="text-muted text-sm">${escHtml(r.notes || '')}</span>` },
-    { label: '', render: r => r.movement_type === 'purchase'
-      ? `<button class="btn btn-sm btn-secondary btn-edit-purchase" data-id="${r.id}">✎</button>`
-      : ''
-    },
+    { label: '', render: r => r.movement_type === 'purchase' ? `
+      <button class="btn btn-sm btn-secondary btn-edit-purchase" data-id="${r.id}">✎</button>
+      <button class="btn btn-sm btn-danger btn-delete-purchase" data-id="${r.id}">✕</button>
+    ` : '' },
   ];
 
   renderTable(container.querySelector('#ledger-table'), ledgerCols, ledger, {
@@ -149,6 +149,26 @@ function _render(container) {
     btn.addEventListener('click', () => {
       const entry = inventory.find(i => i.id === btn.dataset.id);
       if (entry) showEditPurchaseForm(entry, container);
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-purchase').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const entry = inventory.find(i => i.id === btn.dataset.id);
+      const comp = components.find(c => c.id === entry?.component_id);
+      showConfirm(
+        'Удалить закупку?',
+        `${comp?.name || ''}${entry?.brand ? ` (${entry.brand})` : ''} — запись в складе и в балансе будет удалена.`,
+        async () => {
+          try {
+            await deleteRow('Inventory', entry.id);
+            const ledgerEntry = moneyLedger.find(r => r.ref_type === 'inventory' && r.ref_id === entry.id);
+            if (ledgerEntry) await deleteRow('MoneyLedger', ledgerEntry.id);
+            showToast('Закупка удалена');
+            await renderInventory(container);
+          } catch (e) { showToast(e.message, 'error'); }
+        }
+      );
     });
   });
 

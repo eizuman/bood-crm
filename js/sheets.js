@@ -102,6 +102,22 @@ export async function updateRow(sheetName, id, rowData) {
   invalidate(sheetName);
 }
 
+export async function deleteRow(sheetName, id) {
+  const rows = await getRows(sheetName, true);
+  const target = rows.find(r => r.id === id);
+  if (!target) return;
+  const meta = await sheetsRequest('');
+  const sheetMeta = meta.sheets.find(s => s.properties.title === sheetName);
+  if (!sheetMeta) throw new Error(`Sheet ${sheetName} not found`);
+  const gridId = sheetMeta.properties.sheetId;
+  await batchUpdate([{
+    deleteDimension: {
+      range: { sheetId: gridId, dimension: 'ROWS', startIndex: target._row - 1, endIndex: target._row },
+    },
+  }]);
+  invalidate(sheetName);
+}
+
 export async function softDelete(sheetName, id) {
   const rows = await getRows(sheetName, true);
   const target = rows.find(r => r.id === id);
