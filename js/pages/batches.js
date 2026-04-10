@@ -1,0 +1,491 @@
+// Bood CRM — Batches Page (Beer & Distillation)
+import { getRows, appendRow, appendRows, updateRow, softDelete, genId, now, getSettings } from '../sheets.js';
+import { calcCOGS, calcABV, formatCurrency, escHtml, formatDate } from '../utils.js';
+import { showModal, closeModal, showConfirm, showToast, showLoading, showError,
+  renderTabs, renderTable, createStatusChip, createBatchTypeChip, pageHeader,
+  formField, numberInput, textInput, selectInput, textareaInput, collectForm, kpiCard } from '../ui.js';
+import t from '../i18n.js';
+
+let batches = [];
+let components = [];
+let inventory = [];
+let settings = {};
+let filterStatus = 'all';
+
+export async function renderBatches(container) {
+  showLoading(container);
+  try {
+    [batches, components, inventory, settings] = await Promise.all([
+      getRows('Batches'),
+      getRows('Components'),
+      getRows('Inventory'),
+      getSettings(),
+    ]);
+    _render(container);
+  } catch (e) {
+    showError(container, e);
+  }
+}
+
+function _render(container) {
+  const active = batches.filter(b => b.is_active !== 'FALSE');
+  const statusOpts = ['all','planned','brewing','fermenting','distilling','aging','packaging','done','archived'];
+
+  const filtered = active.filter(b => filterStatus === 'all' || b.status === filterStatus);
+  const sorted = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  container.innerHTML = `
+    ${pageHeader(t('batches'))}
+    <div class="toolbar">
+      <div class="filter-chips">
+        ${statusOpts.map(s => `<button class="chip-filter${filterStatus===s?' active':''}" data-status="${s}">${s==='all'?t('all'):t(s)}</button>`).join('')}
+      </div>
+    </div>
+    <div id="batches-table"></div>
+  `;
+
+  const cols = [
+    { label: t('name'), render: r => `<strong>${escHtml(r.name)}</strong>` },
+    { label: t('type'), render: r => createBatchTypeChip(r.type) },
+    { label: t('status'), render: r => createStatusChip(r.status) },
+    { label: t('brew_date'), render: r => formatDate(r.brew_date) },
+    { label: 'ABV', render: r => r.abv ? `${r.abv}%` : (r.og && r.fg ? `${calcABV(r.og, r.fg)}%` : '—') },
+    { label: 'Объём', render: r => r.packaged_l ? `${r.packaged_l} л` : r.to_fermenter_l ? `${r.to_fermenter_l} л` : '—' },
+    { label: 'COGS', render: r => {
+      if (r.cogs_snapshot) {
+        try {
+          const cogs = JSON.parse(r.cogs_snapshot);
+          return formatCurrency(cogs.total, settings.currency);
+        } catch { return '—'; }
+      }
+      return '—';
+    }},
+    { label: 'Posting', render: r => `
+      <span title="Brew">${r.brew_posted==='TRUE'?'✓':' '}</span>
+      <span title="Pack">${r.packaging_posted==='TRUE'?'✓':' '}</span>
+    `},
+  ];
+
+  renderTable(container.querySelector('#batches-table'), cols, sorted, {
+    onRowClick: (row) => showBatchDetail(row, container),
+    emptyMessage: t('no_data'),
+  });
+
+  // Filter chips
+  container.querySelectorAll('.chip-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterStatus = btn.dataset.status;
+      _render(container);
+    });
+  });
+}
+
+// ─── Batch Detail Modal ───────────────────────────────────────────────────────
+function showBatchDetail(batch, pageContainer) {
+  const tabs = batch.type === 'beer'
+    ? [
+        { id: 'overview', label: 'Обзор' },
+        { id: 'plan', label: 'Рецепт' },
+        { id: 'brewday', label: 'День варки' },
+        { id: 'fermentation', label: 'Брожение' },
+        { id: 'packaging', label: 'Упаковка' },
+        { id: 'posting', label: 'Проводки' },
+        { id: 'summary', label: 'Итог' },
+      ]
+    : [
+        { id: 'overview', label: 'Обзор' },
+        { id: 'plan', label: 'Рецепт' },
+        { id: 'braga', label: 'Брага' },
+        { id: 'distill', label: 'Перегон' },
+        { id: 'aging', label: 'Выдержка' },
+        { id: 'packaging', label: 'Розлив' },
+        { id: 'posting', label: 'Проводки' },
+        { id: 'summary', label: 'Итог' },
+      ];
+
+  let activeTab = 'overview';
+  let editedBatch = { ...batch };
+
+  const overlay = showModal(
+    `Партия: ${batch.name}`,
+    `<div id="batch-tabs-nav"></div><div id="batch-tab-content" class="batch-detail-content"></div>`,
+    [
+      { label: t('cancel'), class: 'btn-secondary', action: 'cancel', onClick: closeModal },
+      { label: 'Сохранить', class: 'btn-primary', action: 'save', onClick: () => saveBatch() },
+    ],
+    { fullscreen: true }
+  );
+
+  const tabsNav = overlay.querySelector('#batch-tabs-nav');
+  const tabContent = overlay.querySelector('#batch-tab-content');
+
+  renderTabs(tabsNav, tabs, activeTab, (tab) => {
+    activeTab = tab;
+    renderBatchTab();
+  });
+  renderBatchTab();
+
+  function renderBatchTab() {
+    switch (activeTab) {
+      case 'overview': renderOverviewTab(tabContent, editedBatch); break;
+      case 'plan': renderPlanTab(tabContent, editedBatch); break;
+      case 'brewday': renderBrewDayTab(tabContent, editedBatch); break;
+      case 'braga': renderBragaTab(tabContent, editedBatch); break;
+      case 'distill': renderDistillTab(tabContent, editedBatch); break;
+      case 'fermentation': renderFermentTab(tabContent, editedBatch); break;
+      case 'aging': renderAgingTab(tabContent, editedBatch); break;
+      case 'packaging': renderPackagingTab(tabContent, editedBatch); break;
+      case 'posting': renderPostingTab(tabContent, editedBatch, pageContainer, overlay); break;
+      case 'summary': renderSummaryTab(tabContent, editedBatch); break;
+    }
+    // Sync fields
+    tabContent.querySelectorAll('[name]').forEach(el => {
+      el.addEventListener('change', () => { editedBatch[el.name] = el.value; });
+    });
+  }
+
+  async function saveBatch() {
+    try {
+      editedBatch.updated_at = now();
+      await updateRow('Batches', batch.id, editedBatch);
+      closeModal();
+      showToast(t('saved'));
+      await renderBatches(pageContainer);
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+}
+
+function renderOverviewTab(container, batch) {
+  const snapshot = batch.recipe_snapshot ? JSON.parse(batch.recipe_snapshot) : {};
+  const recipe = snapshot.recipe || {};
+  container.innerHTML = `
+    <div class="form-grid">
+      ${formField('Название партии', `<input type="text" name="name" class="form-control" value="${escHtml(batch.name)}">`)}
+      <div class="form-row-3">
+        ${formField('Тип', `<span class="form-static">${batch.type === 'beer' ? 'Пиво 🍺' : 'Дистиллят 🥃'}</span>`)}
+        ${formField(t('status'), selectInput('status', [
+          'planned','brewing','fermenting','distilling','aging','packaging','done','archived'
+        ].map(s=>({value:s,label:t(s)})), batch.status))}
+        ${formField('Дата варки', `<input type="date" name="brew_date" class="form-control" value="${batch.brew_date?.slice?.(0,10)||''}">`)}
+      </div>
+      ${recipe.name ? `<div class="info-block"><strong>Рецепт:</strong> ${escHtml(recipe.name)} — ${escHtml(recipe.style||'')} | ${recipe.batch_size_l||'?'} л | OG: ${recipe.og_target||'?'}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderPlanTab(container, batch) {
+  const snapshot = batch.recipe_snapshot ? JSON.parse(batch.recipe_snapshot) : {};
+  const recipe = snapshot.recipe || {};
+  const ingList = (snapshot.ingredients || []);
+  const stages = ['mash','boil','whirlpool','fermentation','dry_hop','packaging','wash','distillation','aging'];
+
+  container.innerHTML = `
+    <div class="plan-grid">
+      ${stages.map(stage => {
+        const items = ingList.filter(i => i.stage_key === stage);
+        if (!items.length) return '';
+        return `
+          <div class="plan-section">
+            <h4>${escHtml(stage)}</h4>
+            <table class="data-table">
+              <thead><tr><th>Компонент</th><th>Кол-во</th><th>Время/Этап</th></tr></thead>
+              <tbody>
+                ${items.map(ing => {
+                  const comp = components.find(c => c.id === ing.component_id);
+                  return `<tr>
+                    <td>${escHtml(comp?.name || ing.component_id)}</td>
+                    <td>${escHtml(ing.qty||'')} ${escHtml(comp?.unit||'')}</td>
+                    <td>${escHtml(ing.time_meta||'')}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }).filter(Boolean).join('')}
+      ${!ingList.length ? '<p class="text-muted">Нет данных рецепта</p>' : ''}
+    </div>
+  `;
+}
+
+function renderBrewDayTab(container, batch) {
+  container.innerHTML = `
+    <div class="form-grid">
+      <div class="form-row-3">
+        ${formField('OG измеренная', `<input type="number" name="og" class="form-control" value="${escHtml(batch.og||'')}" step="0.001" placeholder="1.050">`)}
+        ${formField('В ферментёр (л)', `<input type="number" name="to_fermenter_l" class="form-control" value="${escHtml(batch.to_fermenter_l||'')}" step="0.1">`)}
+        ${formField('Потреблено кВт·ч', `<input type="number" name="kwh_used" class="form-control" value="${escHtml(batch.kwh_used||'')}" step="0.1">`)}
+      </div>
+      ${formField('Часов труда', `<input type="number" name="labor_hours" class="form-control" value="${escHtml(batch.labor_hours||'')}" step="0.5">`)}
+      ${formField('Заметки дня варки', `<textarea name="brew_notes" class="form-control" rows="5">${escHtml(batch.brew_notes||'')}</textarea>`)}
+    </div>
+  `;
+}
+
+function renderBragaTab(container, batch) {
+  container.innerHTML = `
+    <div class="form-grid">
+      ${formField('Дата старта браги', `<input type="date" name="brew_date" class="form-control" value="${batch.brew_date?.slice?.(0,10)||''}">`)}
+      ${formField('Нач. плотность браги / OG', `<input type="number" name="og" class="form-control" value="${escHtml(batch.og||'')}" step="0.001">`)}
+      ${formField('Заметки по браге', `<textarea name="brew_notes" class="form-control" rows="5">${escHtml(batch.brew_notes||'')}</textarea>`)}
+    </div>
+  `;
+}
+
+function renderDistillTab(container, batch) {
+  container.innerHTML = `
+    <div class="form-grid">
+      ${formField('Дата перегона', `<input type="date" name="package_date" class="form-control" value="${batch.package_date?.slice?.(0,10)||''}">`)}
+      <div class="form-row-3">
+        ${formField('Выход голов (л)', `<input type="number" name="ferment_notes" class="form-control" value="" step="0.01" placeholder="0.0">`, 'heads')}
+        ${formField('Выход тела (л)', `<input type="number" name="to_fermenter_l" class="form-control" value="${escHtml(batch.to_fermenter_l||'')}" step="0.1" placeholder="0.0">`, 'hearts')}
+        ${formField('Выход хвостов (л)', `<input type="number" name="ferment_days_tails" class="form-control" value="" step="0.01" placeholder="0.0">`, 'tails')}
+      </div>
+      <div class="form-row-2">
+        ${formField('Нач. крепость %', `<input type="number" name="og" class="form-control" value="${escHtml(batch.og||'')}" step="0.1">`)}
+        ${formField('Кон. крепость %', `<input type="number" name="fg" class="form-control" value="${escHtml(batch.fg||'')}" step="0.1">`)}
+      </div>
+      ${formField('Потреблено кВт·ч', `<input type="number" name="kwh_used" class="form-control" value="${escHtml(batch.kwh_used||'')}" step="0.1">`)}
+      ${formField('Заметки перегона', `<textarea name="ferment_notes" class="form-control" rows="5">${escHtml(batch.ferment_notes||'')}</textarea>`)}
+    </div>
+  `;
+}
+
+function renderFermentTab(container, batch) {
+  container.innerHTML = `
+    <div class="form-grid">
+      ${formField('FG измеренная', `<input type="number" name="fg" class="form-control" value="${escHtml(batch.fg||'')}" step="0.001" placeholder="1.010">`)}
+      ${formField('ABV%', `<input type="number" name="abv" class="form-control" value="${escHtml(batch.abv || (batch.og&&batch.fg?calcABV(batch.og,batch.fg):'') ||'')}" step="0.1">`)}
+      ${formField('Заметки брожения', `<textarea name="ferment_notes" class="form-control" rows="6">${escHtml(batch.ferment_notes||'')}</textarea>`)}
+    </div>
+  `;
+}
+
+function renderAgingTab(container, batch) {
+  container.innerHTML = `
+    <div class="form-grid">
+      ${formField('Дата начала выдержки', `<input type="date" name="package_date" class="form-control" value="${batch.package_date?.slice?.(0,10)||''}">`)}
+      ${formField('Заметки выдержки', `<textarea name="ferment_notes" class="form-control" rows="6">${escHtml(batch.ferment_notes||'')}</textarea>`)}
+    </div>
+  `;
+}
+
+function renderPackagingTab(container, batch) {
+  container.innerHTML = `
+    <div class="form-grid">
+      ${formField('Упаковано (л)', `<input type="number" name="packaged_l" class="form-control" value="${escHtml(batch.packaged_l||'')}" step="0.1">`)}
+      ${formField('Дата упаковки', `<input type="date" name="package_date" class="form-control" value="${batch.package_date?.slice?.(0,10)||''}">`)}
+      ${formField('Часов труда (уп.)', `<input type="number" name="labor_hours" class="form-control" value="${escHtml(batch.labor_hours||'')}" step="0.5">`)}
+      ${formField('Заметки упаковки', `<textarea name="package_notes" class="form-control" rows="6">${escHtml(batch.package_notes||'')}</textarea>`)}
+    </div>
+  `;
+}
+
+function renderPostingTab(container, batch, pageContainer, overlay) {
+  const brewPosted = batch.brew_posted === 'TRUE';
+  const packPosted = batch.packaging_posted === 'TRUE';
+  const snapshot = batch.recipe_snapshot ? JSON.parse(batch.recipe_snapshot) : {};
+  const ingredients = snapshot.ingredients || [];
+  const isBeer = batch.type === 'beer';
+
+  container.innerHTML = `
+    <div class="posting-sections">
+      <div class="section-card">
+        <div class="section-card-header">
+          <h4>${isBeer ? 'Проводка варки' : 'Проводка браги'}</h4>
+          <span class="${brewPosted ? 'badge-success' : 'badge-muted'}">${brewPosted ? '✓ Проведено' : '○ Не проведено'}</span>
+        </div>
+        <div class="section-card-body">
+          ${ingredients.filter(i => ['mash','boil','whirlpool','fermentation','dry_hop','wash','distillation'].includes(i.stage_key)).map(ing => {
+            const comp = components.find(c => c.id === ing.component_id);
+            return `<div class="posting-row">
+              <span>${escHtml(comp?.name||'?')}</span>
+              <span>${escHtml(ing.qty||'?')} ${escHtml(comp?.unit||'')}</span>
+              <span class="text-muted">${escHtml(ing.stage_key)}</span>
+            </div>`;
+          }).join('') || '<p class="text-muted">Нет ингредиентов в рецепте</p>'}
+          <div class="posting-actions">
+            <button class="btn btn-primary ${brewPosted ? 'disabled' : ''}" id="btn-post-brew" ${brewPosted ? 'disabled' : ''}>
+              ${isBeer ? t('post_brew') : 'Провести брагу'}
+            </button>
+            ${brewPosted ? `<button class="btn btn-secondary" id="btn-undo-brew">↩ ${t('undo')}</button>` : ''}
+          </div>
+          ${brewPosted ? `<p class="text-muted text-sm">Проведено: ${batch.brew_posted_at ? formatDate(batch.brew_posted_at) : '?'}</p>` : ''}
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-header">
+          <h4>${isBeer ? 'Проводка упаковки' : 'Проводка выхода дистиллята'}</h4>
+          <span class="${packPosted ? 'badge-success' : 'badge-muted'}">${packPosted ? '✓ Проведено' : '○ Не проведено'}</span>
+        </div>
+        <div class="section-card-body">
+          ${ingredients.filter(i => i.stage_key === 'packaging').map(ing => {
+            const comp = components.find(c => c.id === ing.component_id);
+            return `<div class="posting-row"><span>${escHtml(comp?.name||'?')}</span><span>${escHtml(ing.qty||'?')} ${escHtml(comp?.unit||'')}</span></div>`;
+          }).join('') || '<p class="text-muted">Нет упаковочных материалов</p>'}
+          <div class="posting-actions">
+            <button class="btn btn-primary ${packPosted || !brewPosted ? 'disabled' : ''}" id="btn-post-packaging" ${packPosted || !brewPosted ? 'disabled' : ''}>
+              ${isBeer ? t('post_packaging') : 'Провести выход дистиллята'}
+            </button>
+            ${packPosted ? `<button class="btn btn-secondary" id="btn-undo-packaging">↩ ${t('undo')}</button>` : ''}
+          </div>
+          ${!brewPosted && !packPosted ? '<p class="text-warning text-sm">⚠ Сначала проведите варку/брагу</p>' : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Post Brew
+  container.querySelector('#btn-post-brew')?.addEventListener('click', () => {
+    if (brewPosted) return;
+    showConfirm(t('confirm_post'), 'Ингредиенты будут списаны со склада', async () => {
+      try {
+        const ts = now();
+        const inventoryRows = ingredients
+          .filter(i => ['mash','boil','whirlpool','fermentation','dry_hop','wash','distillation'].includes(i.stage_key))
+          .map(ing => {
+            const comp = components.find(c => c.id === ing.component_id);
+            return {
+              id: genId(),
+              component_id: ing.component_id,
+              qty_delta: String(-Math.abs(parseFloat(ing.qty) || 0)),
+              movement_type: isBeer ? 'brew_consume' : 'distill_consume',
+              ref_type: 'batch',
+              ref_id: batch.id,
+              unit_cost: comp?.cost_per_unit || '0',
+              notes: batch.name,
+              created_at: ts,
+            };
+          });
+
+        if (inventoryRows.length) await appendRows('Inventory', inventoryRows);
+
+        batch.brew_posted = 'TRUE';
+        batch.brew_posted_at = ts;
+        await updateRow('Batches', batch.id, { ...batch });
+
+        showToast(t('posted_ok'));
+        closeModal();
+        await renderBatches(pageContainer);
+      } catch (e) { showToast(e.message, 'error'); }
+    });
+  });
+
+  // Post Packaging
+  container.querySelector('#btn-post-packaging')?.addEventListener('click', () => {
+    if (packPosted || !brewPosted) return;
+    showConfirm(t('confirm_post'), 'Упаковочные материалы будут списаны, готовый продукт оприходован', async () => {
+      try {
+        const ts = now();
+        const packIngredients = ingredients.filter(i => i.stage_key === 'packaging');
+        const consumeRows = packIngredients.map(ing => {
+          const comp = components.find(c => c.id === ing.component_id);
+          return {
+            id: genId(), component_id: ing.component_id,
+            qty_delta: String(-Math.abs(parseFloat(ing.qty)||0)),
+            movement_type: 'packaging_consume',
+            ref_type: 'batch', ref_id: batch.id,
+            unit_cost: comp?.cost_per_unit || '0',
+            notes: batch.name, created_at: ts,
+          };
+        });
+
+        // Find the finished product component
+        const finishedType = isBeer ? 'finished_beer' : 'finished_spirit';
+        const finishedComp = components.find(c => c.type === finishedType && c.is_active !== 'FALSE');
+
+        if (finishedComp && batch.packaged_l) {
+          const cogs = calcCOGS(batch, inventory, settings);
+          const costPerL = batch.packaged_l > 0 ? cogs.total / parseFloat(batch.packaged_l) : 0;
+          consumeRows.push({
+            id: genId(), component_id: finishedComp.id,
+            qty_delta: String(batch.packaged_l),
+            movement_type: 'packaging_produce',
+            ref_type: 'batch', ref_id: batch.id,
+            unit_cost: String(costPerL.toFixed(2)),
+            notes: batch.name, created_at: ts,
+          });
+        }
+
+        if (consumeRows.length) await appendRows('Inventory', consumeRows);
+
+        const cogs = calcCOGS(batch, inventory, settings);
+        batch.packaging_posted = 'TRUE';
+        batch.packaging_posted_at = ts;
+        batch.cogs_snapshot = JSON.stringify(cogs);
+        batch.cogs_frozen_at = ts;
+        batch.status = 'done';
+        await updateRow('Batches', batch.id, { ...batch });
+
+        showToast(t('posted_ok'));
+        closeModal();
+        await renderBatches(pageContainer);
+      } catch (e) { showToast(e.message, 'error'); }
+    });
+  });
+
+  // Undo Brew
+  container.querySelector('#btn-undo-brew')?.addEventListener('click', () => {
+    showConfirm(t('confirm_undo'), '', async () => {
+      try {
+        const ts = now();
+        const origMovements = inventory.filter(i => i.ref_id === batch.id && i.movement_type === (isBeer ? 'brew_consume' : 'distill_consume'));
+        const reverseRows = origMovements.map(m => ({
+          id: genId(), component_id: m.component_id,
+          qty_delta: String(-parseFloat(m.qty_delta)),
+          movement_type: 'adjustment', ref_type: 'undo_batch', ref_id: batch.id,
+          unit_cost: m.unit_cost, notes: `Undo: ${batch.name}`, created_at: ts,
+        }));
+        if (reverseRows.length) await appendRows('Inventory', reverseRows);
+        batch.brew_posted = 'FALSE';
+        batch.brew_posted_at = '';
+        await updateRow('Batches', batch.id, { ...batch });
+        showToast('Проводка варки отменена');
+        closeModal();
+        await renderBatches(pageContainer);
+      } catch (e) { showToast(e.message, 'error'); }
+    });
+  });
+}
+
+function renderSummaryTab(container, batch) {
+  const cogs = batch.cogs_snapshot ? JSON.parse(batch.cogs_snapshot) : calcCOGS(batch, inventory, settings);
+  const perL = batch.packaged_l && parseFloat(batch.packaged_l) > 0 ? cogs.total / parseFloat(batch.packaged_l) : 0;
+  const perLAS = batch.fg && parseFloat(batch.fg) > 0 ? cogs.total / (parseFloat(batch.packaged_l||0) * parseFloat(batch.fg||0) / 100) : 0;
+
+  container.innerHTML = `
+    <div class="summary-print">
+      <div class="print-header">
+        <h2>BOOD — ${batch.type === 'beer' ? 'BREW LOG' : 'DISTILL LOG'}</h2>
+        <h3>${escHtml(batch.name)}</h3>
+        <p class="text-muted">${formatDate(batch.brew_date)}</p>
+      </div>
+      <div class="summary-stats">
+        <div class="stat"><span class="stat-label">OG</span><span class="stat-value">${batch.og || '—'}</span></div>
+        <div class="stat"><span class="stat-label">FG</span><span class="stat-value">${batch.fg || '—'}</span></div>
+        <div class="stat"><span class="stat-label">ABV</span><span class="stat-value">${batch.abv || (batch.og&&batch.fg?calcABV(batch.og,batch.fg):'?')}%</span></div>
+        <div class="stat"><span class="stat-label">В ферментёр</span><span class="stat-value">${batch.to_fermenter_l||'?'} л</span></div>
+        <div class="stat"><span class="stat-label">Упаковано</span><span class="stat-value">${batch.packaged_l||'?'} л</span></div>
+        <div class="stat"><span class="stat-label">кВт·ч</span><span class="stat-value">${batch.kwh_used||'?'}</span></div>
+      </div>
+      <div class="cogs-breakdown">
+        <h4>Себестоимость (COGS)</h4>
+        <table class="cost-table">
+          <tr><td>Материалы</td><td>${formatCurrency(cogs.materials, settings.currency)}</td></tr>
+          <tr><td>Упаковка</td><td>${formatCurrency(cogs.packaging, settings.currency)}</td></tr>
+          <tr><td>Электроэнергия</td><td>${formatCurrency(cogs.energy, settings.currency)}</td></tr>
+          <tr><td>Труд</td><td>${formatCurrency(cogs.labor, settings.currency)}</td></tr>
+          <tr class="cost-total"><td><strong>Итого</strong></td><td><strong>${formatCurrency(cogs.total, settings.currency)}</strong></td></tr>
+          <tr><td>На литр</td><td>${formatCurrency(perL, settings.currency)}</td></tr>
+          ${batch.type === 'distillate' && perLAS ? `<tr><td>На литр АС</td><td>${formatCurrency(perLAS, settings.currency)}</td></tr>` : ''}
+        </table>
+      </div>
+      ${batch.brew_notes ? `<div class="notes-section"><h4>Заметки варки</h4><p>${escHtml(batch.brew_notes)}</p></div>` : ''}
+      ${batch.ferment_notes ? `<div class="notes-section"><h4>Заметки брожения</h4><p>${escHtml(batch.ferment_notes)}</p></div>` : ''}
+      <div style="margin-top:24px">
+        <button class="btn btn-secondary" onclick="window.print()">🖨 ${t('print_batch')}</button>
+      </div>
+    </div>
+  `;
+}

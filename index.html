@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Bood CRM — система управления домашним пивоварением и дистилляцией">
+  <title>Bood CRM</title>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/app.css">
+
+  <!-- Favicon inline -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='15' fill='%231A1A1A' stroke='%23D4890A' stroke-width='2'/><text x='16' y='21' text-anchor='middle' font-size='14' fill='%23D4890A' font-family='serif'>M</text></svg>">
+</head>
+<body>
+
+<!-- ═══════ AUTH SCREEN ═══════════════════════════════════════════════════════ -->
+<div id="auth-screen" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img src="assets/logo.svg" alt="Bood" height="56" style="margin:0 auto">
+    </div>
+    <p class="auth-desc" id="auth-desc">Войдите, чтобы управлять своим пивоварением и дистилляцией</p>
+    <button class="btn btn-primary btn-lg" id="btn-sign-in" style="width:100%">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#1A1A1A"/>
+        <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#1A1A1A"/>
+        <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#1A1A1A"/>
+        <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#1A1A1A"/>
+      </svg>
+      Войти через Google
+    </button>
+    <p class="auth-error" id="auth-error"></p>
+  </div>
+</div>
+
+<!-- ═══════ MAIN APP ═══════════════════════════════════════════════════════════ -->
+<div id="app" style="display:none">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <a href="#/dashboard">
+        <img src="assets/logo.svg" alt="Bood" height="44">
+      </a>
+    </div>
+
+    <div class="sidebar-nav">
+      <a href="#/dashboard"    class="nav-item" data-route="/dashboard">
+        <span class="nav-icon">◆</span> Обзор
+      </a>
+
+      <div class="nav-section-label">Склад</div>
+      <a href="#/components"   class="nav-item" data-route="/components">
+        <span class="nav-icon">⊞</span> Компоненты
+      </a>
+      <a href="#/inventory"    class="nav-item" data-route="/inventory">
+        <span class="nav-icon">≡</span> Склад
+      </a>
+
+      <div class="nav-section-label">Производство</div>
+      <a href="#/recipes/beer" class="nav-item" data-route="/recipes/beer">
+        <span class="nav-icon">🍺</span> Рецепты (Пиво)
+      </a>
+      <a href="#/recipes/spirit" class="nav-item" data-route="/recipes/spirit">
+        <span class="nav-icon">🥃</span> Рецепты (Дистиллят)
+      </a>
+      <a href="#/batches"      class="nav-item" data-route="/batches">
+        <span class="nav-icon">⚗</span> Партии
+      </a>
+      <a href="#/distillation" class="nav-item" data-route="/distillation">
+        <span class="nav-icon">♨</span> Дистилляция
+      </a>
+
+      <div class="nav-section-label">CRM</div>
+      <a href="#/customers"    class="nav-item" data-route="/customers">
+        <span class="nav-icon">◎</span> Клиенты
+      </a>
+      <a href="#/sales"        class="nav-item" data-route="/sales">
+        <span class="nav-icon">₽</span> Продажи
+      </a>
+
+      <div class="nav-divider"></div>
+      <a href="#/settings"     class="nav-item" data-route="/settings">
+        <span class="nav-icon">⚙</span> Настройки
+      </a>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-info" id="user-email">—</div>
+      <button class="btn btn-secondary btn-sm" id="btn-sign-out" style="width:100%">Выйти</button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main-content">
+    <div class="main-inner" id="page-content">
+      <div class="loading-state"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- Mobile bottom nav -->
+  <nav class="mobile-nav">
+    <div class="mobile-nav-items">
+      <a href="#/dashboard"    class="mobile-nav-item" data-route="/dashboard">
+        <span class="mobile-nav-icon">◆</span><span>Обзор</span>
+      </a>
+      <a href="#/batches"      class="mobile-nav-item" data-route="/batches">
+        <span class="mobile-nav-icon">⚗</span><span>Партии</span>
+      </a>
+      <a href="#/inventory"    class="mobile-nav-item" data-route="/inventory">
+        <span class="mobile-nav-icon">≡</span><span>Склад</span>
+      </a>
+      <a href="#/customers"    class="mobile-nav-item" data-route="/customers">
+        <span class="mobile-nav-icon">◎</span><span>Клиенты</span>
+      </a>
+      <a href="#/settings"     class="mobile-nav-item" data-route="/settings">
+        <span class="mobile-nav-icon">⚙</span><span>Настройки</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Mobile sidebar overlay -->
+  <div id="sidebar-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99"></div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- ═══════ APP BOOTSTRAP ═════════════════════════════════════════════════════ -->
+<script type="module">
+  import { initAuth, signIn, signOut, isSignedIn } from './js/auth.js';
+  import { navigate, register, start, onNavigate } from './js/router.js';
+  import { getSettings } from './js/sheets.js';
+  import { setLanguage } from './js/i18n.js';
+
+  // Lazy page imports
+  const pages = {
+    '/dashboard':    () => import('./js/pages/dashboard.js').then(m => m.renderDashboard),
+    '/components':   () => import('./js/pages/components.js').then(m => m.renderComponents),
+    '/inventory':    () => import('./js/pages/inventory.js').then(m => m.renderInventory),
+    '/recipes':      () => import('./js/pages/recipes.js').then(m => m.renderRecipes),
+    '/batches':      () => import('./js/pages/batches.js').then(m => m.renderBatches),
+    '/distillation': () => import('./js/pages/distillation.js').then(m => m.renderDistillation),
+    '/customers':    () => import('./js/pages/customers.js').then(m => m.renderCustomers),
+    '/sales':        () => import('./js/pages/sales.js').then(m => m.renderSales),
+    '/settings':     () => import('./js/pages/settings.js').then(m => m.renderSettings),
+  };
+
+  const authScreen = document.getElementById('auth-screen');
+  const appEl = document.getElementById('app');
+  const pageContent = document.getElementById('page-content');
+  const userEmailEl = document.getElementById('user-email');
+  const btnSignIn = document.getElementById('btn-sign-in');
+  const btnSignOut = document.getElementById('btn-sign-out');
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  async function onSignIn(token) {
+    authScreen.style.display = 'none';
+    appEl.style.display = 'flex';
+
+    // Load settings + set language
+    try {
+      const s = await getSettings();
+      if (s.language) setLanguage(s.language);
+    } catch (_) {}
+
+    // Try to get user info from token
+    try {
+      const resp = await fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + token);
+      const info = await resp.json();
+      if (info.email) userEmailEl.textContent = info.email;
+    } catch (_) {}
+
+    start();
+  }
+
+  function onSignOut() {
+    appEl.style.display = 'none';
+    authScreen.style.display = 'flex';
+  }
+
+  await initAuth(onSignIn, onSignOut);
+
+  // Show auth or app
+  if (!isSignedIn()) {
+    authScreen.style.display = 'flex';
+  }
+
+  // ── Sign in/out ───────────────────────────────────────────────────────────
+  btnSignIn?.addEventListener('click', signIn);
+  btnSignOut?.addEventListener('click', () => {
+    if (confirm('Выйти из аккаунта?')) {
+      signOut();
+      onSignOut();
+    }
+  });
+
+  // ── Router ────────────────────────────────────────────────────────────────
+  function loadPage(loader, args = []) {
+    pageContent.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+    loader().then(renderFn => renderFn(pageContent, ...args)).catch(e => {
+      pageContent.innerHTML = `<div class="error-state"><span class="error-icon">⚠</span><p>${e.message}</p></div>`;
+      console.error(e);
+    });
+  }
+
+  register('/dashboard',    () => loadPage(pages['/dashboard']));
+  register('/components',   () => loadPage(pages['/components']));
+  register('/inventory',    () => loadPage(pages['/inventory']));
+  register('/recipes',      (parts) => {
+    const type = parts[1] === 'spirit' ? 'spirit' : 'beer';
+    loadPage(pages['/recipes'], [type]);
+  });
+  register('/batches',      () => loadPage(pages['/batches']));
+  register('/distillation', () => loadPage(pages['/distillation']));
+  register('/customers',    () => loadPage(pages['/customers']));
+  register('/sales',        () => loadPage(pages['/sales']));
+  register('/settings',     () => loadPage(pages['/settings']));
+
+  // ── Active nav highlight ──────────────────────────────────────────────────
+  onNavigate((hash) => {
+    const route = '/' + hash.split('/').filter(Boolean).slice(0,2).join('/');
+    const baseRoute = '/' + hash.split('/').filter(Boolean)[0];
+
+    document.querySelectorAll('[data-route]').forEach(el => {
+      const r = el.dataset.route;
+      const isActive = route === r || baseRoute === r ||
+        (r === '/recipes/beer' && hash.startsWith('/recipes/beer')) ||
+        (r === '/recipes/spirit' && hash.startsWith('/recipes/spirit'));
+      el.classList.toggle('active', isActive);
+    });
+  });
+
+  // ── Mobile sidebar ────────────────────────────────────────────────────────
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+
+  overlay?.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.style.display = 'none';
+  });
+</script>
+
+</body>
+</html>
