@@ -127,6 +127,7 @@ function showRecipeEditor(recipe, pageContainer) {
   ];
 
   let currentView = 'editor'; // 'editor' | 'costs'
+  let isSaving = false;
 
   const overlay = showModal(
     isNew ? t('new_recipe') : `Рецепт: ${recipe.name}`,
@@ -542,6 +543,11 @@ function showRecipeEditor(recipe, pageContainer) {
   }
 
   async function saveRecipe() {
+    if (isSaving) return;
+    isSaving = true;
+    const saveBtn = overlay.querySelector('[data-action=save]');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '…'; }
+
     // Collect all open form fields (with Brix→SG conversion for OG/FG)
     // water_additions is managed separately via recipeData directly — don't overwrite
     overlay.querySelectorAll('[name]').forEach(el => {
@@ -621,7 +627,11 @@ function showRecipeEditor(recipe, pageContainer) {
       closeModal();
       showToast(t('saved'));
       await renderRecipes(pageContainer, recipeType);
-    } catch (e) { showToast(e.message, 'error'); }
+    } catch (e) {
+      showToast(e.message, 'error');
+      isSaving = false;
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('save'); }
+    }
   }
 }
 
