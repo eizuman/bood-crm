@@ -124,12 +124,12 @@
       <a href="#/inventory"    class="mobile-nav-item" data-route="/inventory">
         <span class="mobile-nav-icon">≡</span><span>Склад</span>
       </a>
-      <a href="#/customers"    class="mobile-nav-item" data-route="/customers">
-        <span class="mobile-nav-icon">◎</span><span>Клиенты</span>
+      <a href="#/recipes/beer" class="mobile-nav-item" data-route="/recipes/beer">
+        <span class="mobile-nav-icon">🍺</span><span>Рецепты</span>
       </a>
-      <a href="#/settings"     class="mobile-nav-item" data-route="/settings">
-        <span class="mobile-nav-icon">⚙</span><span>Настройки</span>
-      </a>
+      <button class="mobile-nav-item" id="btn-mobile-menu" style="background:none;border:none;cursor:pointer;font-family:inherit">
+        <span class="mobile-nav-icon">☰</span><span>Ещё</span>
+      </button>
     </div>
   </nav>
 
@@ -256,9 +256,24 @@
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
 
-  overlay?.addEventListener('click', () => {
+  function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.style.display = 'block';
+  }
+  function closeSidebar() {
     sidebar.classList.remove('open');
     overlay.style.display = 'none';
+  }
+
+  overlay?.addEventListener('click', closeSidebar);
+
+  document.getElementById('btn-mobile-menu')?.addEventListener('click', openSidebar);
+
+  // Close sidebar on nav click (mobile)
+  sidebar.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+      if (window.innerWidth <= 768) closeSidebar();
+    });
   });
 </script>
 
