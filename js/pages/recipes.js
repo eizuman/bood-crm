@@ -561,7 +561,12 @@ function showRecipeEditor(recipe, pageContainer) {
       }
     });
 
-    if (!recipeData.name?.trim()) { showToast('Введите название рецепта', 'warning'); return; }
+    if (!recipeData.name?.trim()) {
+      showToast('Введите название рецепта', 'warning');
+      isSaving = false;
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('save'); }
+      return;
+    }
     try {
       const ts = now();
       const recipeId = isNew ? genId() : recipe.id;
