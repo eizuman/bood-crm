@@ -911,14 +911,11 @@ body.modal-open { overflow: hidden; }
   margin-bottom: 8px;
   flex-wrap: nowrap;
 }
-/* Fixed-width component dropdown — prevents columns from jumping */
+/* Ingredient component dropdown — grows to fill available row space */
 .ing-select-fixed {
-  width: 160px;
-  min-width: 160px;
-  max-width: 160px;
-  flex-shrink: 0;
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .mash-rest-row {
   display: flex;
