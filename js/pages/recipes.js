@@ -408,7 +408,7 @@ function showRecipeEditor(recipe, pageContainer) {
       const packaged = getN('[name=packaged_l]', recipeData.packaged_l);
       const fermLoss = parseFloat(recipeData.fermenter_loss_pct) || parseFloat(settings.fermenter_loss_pct) || 5;
       const brewLoss = parseFloat(recipeData.brew_loss_pct)      || parseFloat(settings.brew_loss_pct)      || 10;
-      const hm       = getN('[name=hydromodule]', recipeData.hydromodule) || 3;
+      const hm       = getN('[name=hydromodule]', recipeData.hydromodule) || 4;
       const boilMins = getN('[name=boil_time_min]', recipeData.boil_time_min) || 60;
 
       // Equipment profile params
@@ -904,7 +904,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
     wort_shrinkage_pct:parseFloat(selProf?.wort_shrinkage_pct|| settings.wort_shrinkage_pct|| 4),
   };
   const wcGrainKg    = totalGrainG / 1000;
-  const wcHM         = parseFloat(data.hydromodule) || 3;
+  const wcHM         = parseFloat(data.hydromodule) || 4;
   const wcMash       = parseFloat(data.water_mash_l) || 0;
   const wcSparge     = parseFloat(data.water_sparge_l) || 0;
   const wcPreboil    = parseFloat(data.water_total_l) || 0;   // repurposed field
@@ -1040,7 +1040,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <div class="water-chain-row">
             <div class="water-chain-cell">
               <label class="wc-label">ГМ</label>
-              <input type="number" name="hydromodule" class="form-control wc-input" value="${escHtml(data.hydromodule||'3')}" step="0.1" placeholder="3">
+              <input type="number" name="hydromodule" class="form-control wc-input" value="${escHtml(data.hydromodule||'4')}" step="0.1" placeholder="4">
               ${wcGrainKg > 0 ? `<span class="wc-hint">→ ${wcExpMash.toFixed(1)} л</span>` : ''}
             </div>
             <div class="water-chain-cell">
