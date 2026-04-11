@@ -218,8 +218,14 @@ function showRecipeEditor(recipe, pageContainer) {
     tabContent.querySelector('.btn-add-grain')?.addEventListener('click', () => {
       addIngredient('mash', recipeIngredients, renderView);
     });
+    tabContent.querySelector('.btn-add-mash-additive')?.addEventListener('click', () => {
+      addIngredientFiltered('mash', recipeIngredients, renderView, ['additive','sugar','other']);
+    });
     tabContent.querySelector('.btn-add-boil-hop')?.addEventListener('click', () => {
       addIngredientFiltered('boil', recipeIngredients, renderView, ['hop']);
+    });
+    tabContent.querySelector('.btn-add-boil-additive')?.addEventListener('click', () => {
+      addIngredientFiltered('boil', recipeIngredients, renderView, ['additive','other']);
     });
     tabContent.querySelector('.btn-add-whirlpool')?.addEventListener('click', () => {
       addIngredientFiltered('whirlpool', recipeIngredients, renderView, ['hop', 'additive']);
@@ -900,7 +906,7 @@ function renderGrainRows(grains, totalGrainG) {
     const hex  = ebcToHex(ebc);
     return `
       <div class="ingredient-row">
-        <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" style="flex:2">
+        <select class="form-control ingredient-comp ing-select-fixed" data-id="${escHtml(ing.id)}">
           ${grainComps.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
         </select>
         <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}"
@@ -929,7 +935,7 @@ function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = 
     const ibuLabel = isWhirlpool && ibu > 0 ? `~${Math.round(ibu * 10) / 10}IBU` : ibu > 0 ? `${Math.round(ibu * 10) / 10}IBU` : '';
     return `
       <div class="ingredient-row ${rowCls}">
-        <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" style="flex:2">
+        <select class="form-control ingredient-comp ing-select-fixed" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">
           ${hopComps.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
         </select>
         <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"
@@ -1012,13 +1018,17 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
     return `<span class="wc-split-hint">затор&nbsp;${m}г / пром&nbsp;${s}г</span>`;
   }
 
-  // Ingredient groups
-  const grains       = ingredients.filter(i => i.stage_key === 'mash');
-  const boilHops     = ingredients.filter(i => i.stage_key === 'boil');
-  const whirlpool    = ingredients.filter(i => i.stage_key === 'whirlpool');
-  const fermentItems = ingredients.filter(i => i.stage_key === 'fermentation');
-  const dryHops      = ingredients.filter(i => i.stage_key === 'dry_hop');
-  const packItems    = ingredients.filter(i => i.stage_key === 'packaging');
+  // Ingredient groups (split by component type for correct renderer)
+  const compType = id => components.find(c => c.id === id)?.type || '';
+  const GRAIN_TYPES = ['malt','grain_distill','sugar','other'];
+  const grains         = ingredients.filter(i => i.stage_key === 'mash' && GRAIN_TYPES.includes(compType(i.component_id)));
+  const mashAdditives  = ingredients.filter(i => i.stage_key === 'mash' && !GRAIN_TYPES.includes(compType(i.component_id)));
+  const boilHops       = ingredients.filter(i => i.stage_key === 'boil' && compType(i.component_id) === 'hop');
+  const boilAdditives  = ingredients.filter(i => i.stage_key === 'boil' && compType(i.component_id) !== 'hop');
+  const whirlpool      = ingredients.filter(i => i.stage_key === 'whirlpool');
+  const fermentItems   = ingredients.filter(i => i.stage_key === 'fermentation');
+  const dryHops        = ingredients.filter(i => i.stage_key === 'dry_hop');
+  const packItems      = ingredients.filter(i => i.stage_key === 'packaging');
 
   // Auto-calc IBU (Tinseth) and EBC (Morey)
   const batchVol = parseFloat(data.batch_size_l) || parseFloat(data.fermenter_l) || 20;
@@ -1274,7 +1284,11 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       <div class="section-card-body">
         <div class="form-grid">
           ${renderGrainRows(grains, totalGrainG)}
-          <button type="button" class="btn btn-secondary btn-add-grain">+ Добавить солод</button>
+          ${mashAdditives.length > 0 ? renderIngredientList(mashAdditives, 'mash', ['additive','sugar','other']) : ''}
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-secondary btn-add-grain">+ Солод</button>
+            <button type="button" class="btn btn-secondary btn-add-mash-additive">+ Добавка</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1313,7 +1327,11 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           </div>
           <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin:4px 0 2px">Хмель — кипячение</div>
           ${renderHopRows(boilHops, 'boil', data.boil_time_min, og, batchVol)}
-          <button type="button" class="btn btn-secondary btn-add-boil-hop">+ Добавить хмель</button>
+          ${boilAdditives.length > 0 ? renderIngredientList(boilAdditives, 'boil', ['additive','other']) : ''}
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-secondary btn-add-boil-hop">+ Хмель</button>
+            <button type="button" class="btn btn-secondary btn-add-boil-additive">+ Добавка</button>
+          </div>
           <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">
             <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:5px">Вирпул</div>
             <div class="form-row-2" style="margin-bottom:4px">
@@ -1666,7 +1684,7 @@ function renderIngredientList(items, stageKey, allowedTypes = []) {
     const unit = comp?.unit || '';
     return `
       <div class="ingredient-row">
-        <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" style="flex:2">
+        <select class="form-control ingredient-comp ing-select-fixed" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">
           ${filteredComponents.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
         </select>
         <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"

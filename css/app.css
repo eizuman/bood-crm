@@ -909,7 +909,16 @@ body.modal-open { overflow: hidden; }
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+/* Fixed-width component dropdown — prevents columns from jumping */
+.ing-select-fixed {
+  width: 160px;
+  min-width: 160px;
+  max-width: 160px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mash-rest-row {
   display: flex;
