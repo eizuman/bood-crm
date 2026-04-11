@@ -2,7 +2,7 @@
 import { getRows, appendRow, appendRows, updateRow, softDelete, deleteRow, genId, now } from '../sheets.js';
 import { getSettings } from '../sheets.js';
 import { BJCP_STYLES, getBjcpGroups, sgToBrix, brixToSg, MASH_PRESETS } from '../bjcp.js';
-import { BREWING_SALTS, WATER_PROFILES, getStyleWaterProfile, calcWaterProfile, calcIBUTinseth, calcEBC } from '../water.js';
+import { BREWING_SALTS, WATER_PROFILES, getStyleWaterProfile, calcWaterProfile, solveSaltsFromIons, calcIBUTinseth, calcEBC } from '../water.js';
 import { calcABV, calcCOGS, calcOnHand, formatCurrency, escHtml, generateBeerSteps, generateSpiritSteps, getEffectivePrice } from '../utils.js';
 import { showModal, closeModal, showConfirm, showToast, showLoading, showError,
   renderTabs, pageHeader, formField, textInput, numberInput, selectInput, textareaInput, collectForm } from '../ui.js';
@@ -581,7 +581,48 @@ function showRecipeEditor(recipe, pageContainer) {
       isDirty = true;
     }
 
-    // Profile selector → pre-fill salt amounts scaled to mash volume
+    // ── Water helpers ─────────────────────────────────────────────────────────
+    function getWaterTotalL() {
+      const mash   = parseFloat(tabContent.querySelector('[name=water_mash_l]')?.value   || recipeData.water_mash_l   || 0);
+      const sparge = parseFloat(tabContent.querySelector('[name=water_sparge_l]')?.value || recipeData.water_sparge_l || 0);
+      return (mash + sparge) || 10;
+    }
+    function getWaterMashFrac() {
+      const mash   = parseFloat(tabContent.querySelector('[name=water_mash_l]')?.value   || recipeData.water_mash_l   || 0);
+      const sparge = parseFloat(tabContent.querySelector('[name=water_sparge_l]')?.value || recipeData.water_sparge_l || 0);
+      const total  = mash + sparge;
+      return total > 0 ? mash / total : 0.5;
+    }
+
+    // Update the ion inputs from current salt additions (salts → ions)
+    function refreshIonDisplay() {
+      const additions = getWaterAdditions();
+      const vol  = getWaterTotalL();
+      const ions = calcWaterProfile(additions, vol);
+      ['ca','mg','na','so4','cl','hco3'].forEach(key => {
+        const el = tabContent.querySelector(`.ion-input[data-ion="${key}"]`);
+        if (el) el.value = Math.round(ions[key] || 0);
+      });
+      // Update volume label
+      const lbl = tabContent.querySelector('#water-ions-vol-label');
+      if (lbl) lbl.textContent = `ppm · ${vol.toFixed(1)} л`;
+    }
+
+    // Update split hints (затор Xг / пром Yг) after volume change
+    function refreshSaltSplits() {
+      const additions = getWaterAdditions();
+      const mashFrac   = getWaterMashFrac();
+      const spargeFrac = 1 - mashFrac;
+      tabContent.querySelectorAll('.water-salt-split[data-idx]').forEach(span => {
+        const idx = parseInt(span.dataset.idx);
+        const totalG = parseFloat(additions[idx]?.amount) || 0;
+        const m = +(totalG * mashFrac).toFixed(1);
+        const s = +(totalG * spargeFrac).toFixed(1);
+        span.innerHTML = (m || s) ? `<span class="wc-split-hint">затор&nbsp;${m}г / пром&nbsp;${s}г</span>` : '';
+      });
+    }
+
+    // Profile selector → pre-fill salt amounts scaled to total water volume
     tabContent.querySelector('#water-profile-select')?.addEventListener('change', (e) => {
       const key = e.target.value;
       recipeData.water_profile = key;
@@ -593,8 +634,8 @@ function showRecipeEditor(recipe, pageContainer) {
           const phEl = tabContent.querySelector('[name=ph_target]');
           if (phEl) phEl.value = profile.ph_target;
         }
-        // Build salt additions scaled to mash volume (additions_per_10l × vol/10)
-        const vol = parseFloat(tabContent.querySelector('[name=water_mash_l]')?.value || recipeData.water_mash_l || 10);
+        // Scale additions_per_10l to total water volume (mash + sparge)
+        const vol   = getWaterTotalL();
         const scale = vol / 10;
         const additions = Object.entries(profile.additions_per_10l || {})
           .filter(([, v]) => v > 0)
@@ -626,16 +667,20 @@ function showRecipeEditor(recipe, pageContainer) {
       });
     });
 
-    // Salt type change
+    // Salt type change → refresh ions
     tabContent.querySelectorAll('.water-salt-select').forEach(sel => {
       sel.addEventListener('change', () => {
         const idx = parseInt(sel.dataset.idx);
         const additions = getWaterAdditions();
-        if (additions[idx]) { additions[idx].salt = sel.value; saveWaterAdditions(additions); }
+        if (additions[idx]) {
+          additions[idx].salt = sel.value;
+          saveWaterAdditions(additions);
+          refreshIonDisplay();
+        }
       });
     });
 
-    // Salt amount change — also update ion display live
+    // Salt amount change → refresh ions + splits
     tabContent.querySelectorAll('.water-salt-amount').forEach(input => {
       input.addEventListener('input', () => {
         const idx = parseInt(input.dataset.idx);
@@ -643,15 +688,32 @@ function showRecipeEditor(recipe, pageContainer) {
         if (additions[idx]) {
           additions[idx].amount = parseFloat(input.value) || 0;
           saveWaterAdditions(additions);
-          // Refresh ion display only (no full re-render)
-          const vol = parseFloat(tabContent.querySelector('[name=water_mash_l]')?.value || recipeData.water_mash_l || 10);
-          const ions = calcWaterProfile(additions, vol);
-          const labels = ['ca','mg','na','so4','cl','hco3'];
-          tabContent.querySelectorAll('.water-ion .ion-val').forEach((el, i) => {
-            const v = ions[labels[i]] || 0;
-            el.textContent = v > 0 ? Math.round(v) : '0';
-          });
+          refreshIonDisplay();
+          refreshSaltSplits();
         }
+      });
+    });
+
+    // Ion input change (bidirectional) → solve salts → re-render
+    tabContent.querySelectorAll('.ion-input').forEach(input => {
+      input.addEventListener('change', () => {
+        const targets = {};
+        ['ca','mg','na','so4','cl','hco3'].forEach(key => {
+          const el = tabContent.querySelector(`.ion-input[data-ion="${key}"]`);
+          if (el) targets[key] = parseFloat(el.value) || 0;
+        });
+        const vol      = getWaterTotalL();
+        const solved   = solveSaltsFromIons(targets, vol);
+        saveWaterAdditions(solved);
+        renderView();
+      });
+    });
+
+    // Water volume change → refresh salt splits (ion refresh handled by updateWaterChain)
+    ['[name=water_mash_l]','[name=water_sparge_l]'].forEach(sel => {
+      tabContent.querySelector(sel)?.addEventListener('input', () => {
+        refreshSaltSplits();
+        refreshIonDisplay();
       });
     });
   }
@@ -875,11 +937,21 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   // Water chemistry
   let waterAdditions = [];
   try { waterAdditions = JSON.parse(data.water_additions || '[]'); } catch {}
-  const waterVol = parseFloat(data.water_mash_l) || 10;
-  const waterIons = calcWaterProfile(waterAdditions, waterVol);
+  const waterMashL   = parseFloat(data.water_mash_l)   || 0;
+  const waterSpargeL = parseFloat(data.water_sparge_l)  || 0;
+  const waterTotalL  = waterMashL + waterSpargeL || 10;
+  const waterIons    = calcWaterProfile(waterAdditions, waterTotalL);
+  const mashFrac     = waterTotalL > 0 ? waterMashL   / waterTotalL : 0;
+  const spargeFrac   = waterTotalL > 0 ? waterSpargeL / waterTotalL : 0;
   const recommendedProfile = getStyleWaterProfile(data.style);
   const currentProfile = data.water_profile || '';
   function ionPpm(v) { return v > 0 ? Math.round(v) : '0'; }
+  function saltSplit(totalG) {
+    if (!waterMashL && !waterSpargeL) return '';
+    const m = +(totalG * mashFrac).toFixed(1);
+    const s = +(totalG * spargeFrac).toFixed(1);
+    return `<span class="wc-split-hint">затор&nbsp;${m}г / пром&nbsp;${s}г</span>`;
+  }
 
   // Ingredient groups
   const grains       = ingredients.filter(i => i.stage_key === 'mash');
@@ -1093,32 +1165,37 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
               <input type="number" name="ph_target" class="form-control" value="${escHtml(data.ph_target||'')}" step="0.05" placeholder="5.4" min="4.5" max="6.5">
             </div>
           </div>
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <label class="form-label" style="margin:0">Соли (в затор)</label>
-              <button type="button" class="btn btn-sm btn-secondary btn-add-salt">+ Соль</button>
-            </div>
-            <div id="water-salts-list">
-              ${waterAdditions.length === 0 ? '<p class="text-muted" style="font-size:12px">Нет добавок</p>' :
-                waterAdditions.map((add, i) => `<div class="water-salt-row">
-                  <select class="form-control water-salt-select" data-idx="${i}">
-                    ${BREWING_SALTS.map(s => `<option value="${s.id}" ${s.id===add.salt?'selected':''}>${s.formula} — ${escHtml(s.name)}</option>`).join('')}
-                  </select>
-                  <input type="number" class="form-control water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0">
-                  <span class="text-muted" style="font-size:11px;white-space:nowrap">г</span>
-                  <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}">✕</button>
-                </div>`).join('')}
-            </div>
+
+          <!-- Ion formula (editable, bidirectional) -->
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+            <label class="form-label" style="margin:0">Ионный состав воды</label>
+            <span class="text-muted" id="water-ions-vol-label" style="font-size:10px">ppm · ${waterTotalL.toFixed(1)} л</span>
           </div>
-          <div class="water-ions">
-            <div class="water-ion"><span class="ion-label">Ca²⁺</span><span class="ion-val">${ionPpm(waterIons.ca)}</span></div>
-            <div class="water-ion"><span class="ion-label">Mg²⁺</span><span class="ion-val">${ionPpm(waterIons.mg)}</span></div>
-            <div class="water-ion"><span class="ion-label">Na⁺</span><span class="ion-val">${ionPpm(waterIons.na)}</span></div>
-            <div class="water-ion"><span class="ion-label">SO₄²⁻</span><span class="ion-val">${ionPpm(waterIons.so4)}</span></div>
-            <div class="water-ion"><span class="ion-label">Cl⁻</span><span class="ion-val">${ionPpm(waterIons.cl)}</span></div>
-            <div class="water-ion"><span class="ion-label">HCO₃⁻</span><span class="ion-val">${ionPpm(waterIons.hco3)}</span></div>
+          <div class="water-ions-edit" id="water-ions-row">
+            ${[['ca','Ca²⁺'],['mg','Mg²⁺'],['na','Na⁺'],['so4','SO₄²⁻'],['cl','Cl⁻'],['hco3','HCO₃⁻']].map(([key,lbl]) => `
+              <div class="water-ion-cell">
+                <label class="ion-label">${lbl}</label>
+                <input type="number" class="form-control ion-input" data-ion="${key}" value="${ionPpm(waterIons[key])}" min="0" step="1" placeholder="0">
+              </div>`).join('')}
           </div>
-          <div class="text-muted" style="font-size:0.75em;text-align:center">ppm · ${waterVol} л затора</div>
+
+          <!-- Соли — на весь объём, с автораспределением -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;margin-bottom:4px">
+            <label class="form-label" style="margin:0">Соли <span class="text-muted" style="font-weight:400;font-size:0.78em">(на весь объём → распределяются пропорционально)</span></label>
+            <button type="button" class="btn btn-sm btn-secondary btn-add-salt">+ Соль</button>
+          </div>
+          <div id="water-salts-list">
+            ${waterAdditions.length === 0 ? '<p class="text-muted" style="font-size:12px">Нет добавок</p>' :
+              waterAdditions.map((add, i) => `<div class="water-salt-row" data-idx="${i}">
+                <select class="form-control water-salt-select" data-idx="${i}">
+                  ${BREWING_SALTS.map(s => `<option value="${s.id}" ${s.id===add.salt?'selected':''}>${s.formula} — ${escHtml(s.name)}</option>`).join('')}
+                </select>
+                <input type="number" class="form-control water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0" style="width:70px">
+                <span class="text-muted" style="font-size:11px;flex-shrink:0">г</span>
+                <span class="water-salt-split" data-idx="${i}">${saltSplit(parseFloat(add.amount)||0)}</span>
+                <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}">✕</button>
+              </div>`).join('')}
+          </div>
         </div>
       </div>
     </div>

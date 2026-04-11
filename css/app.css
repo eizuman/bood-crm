@@ -866,6 +866,44 @@ body.modal-open { overflow: hidden; }
 .water-ion .ion-label { color: var(--text-muted); display: block; }
 .water-ion .ion-val { font-weight: 600; }
 
+/* Editable ion formula row */
+.water-ions-edit {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+.water-ion-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+.water-ion-cell .ion-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.water-ion-cell .ion-input {
+  width: 100%;
+  text-align: center;
+  padding: 3px 4px;
+  font-size: 12px;
+  height: 28px;
+}
+
+/* Salt split hint inside water-salt-row */
+.water-salt-split { flex-shrink: 0; }
+.wc-split-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .ingredient-row {
   display: flex;
   align-items: center;
