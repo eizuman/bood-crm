@@ -1028,7 +1028,6 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   const whirlpool      = ingredients.filter(i => i.stage_key === 'whirlpool');
   const fermentItems   = ingredients.filter(i => i.stage_key === 'fermentation');
   const dryHops        = ingredients.filter(i => i.stage_key === 'dry_hop');
-  const packItems      = ingredients.filter(i => i.stage_key === 'packaging');
 
   // Auto-calc IBU (Tinseth) and EBC (Morey)
   const batchVol = parseFloat(data.batch_size_l) || parseFloat(data.fermenter_l) || 20;
@@ -1092,8 +1091,8 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
 
   container.innerHTML = `
   <div class="recipe-mobile-tabs" role="tablist">
-    ${['overview','water','grain','mash','boil','fermentation','packaging'].map(t =>
-      `<button class="rmt-tab${t===activeTab?' active':''}" data-tab="${t}">${{overview:'Обзор',water:'Вода',grain:'Засыпь',mash:'Затирание',boil:'Кипячение',fermentation:'Брожение',packaging:'Упаковка'}[t]}</button>`
+    ${['overview','water','grain','mash','boil','fermentation'].map(t =>
+      `<button class="rmt-tab${t===activeTab?' active':''}" data-tab="${t}">${{overview:'Обзор',water:'Вода',grain:'Засыпь',mash:'Затирание',boil:'Кипячение',fermentation:'Брожение'}[t]}</button>`
     ).join('')}
   </div>
   <div class="recipe-editor-grid" data-active-tab="${activeTab}">
@@ -1375,16 +1374,6 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       </div>
     </div>
 
-    <div class="section-card" data-section="packaging">
-      <div class="section-card-header"><h4>📦 Упаковка</h4></div>
-      <div class="section-card-body">
-        <div class="form-grid">
-          ${formField('Заметки', `<textarea name="manual_notes" class="form-control" rows="2">${escHtml(data.manual_notes||'')}</textarea>`)}
-          ${renderIngredientList(packItems, 'packaging', ['packaging','additive','other'])}
-          <button type="button" class="btn btn-secondary btn-add-packaging">+ Добавить материал</button>
-        </div>
-      </div>
-    </div>
 
   </div><!-- /col 3 -->
   </div>`; // end .recipe-editor-grid
