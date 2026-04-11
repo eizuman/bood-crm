@@ -308,13 +308,38 @@ function showRecipeEditor(recipe, pageContainer) {
       });
     });
 
-    // Update component selection + unit label
+    // Update component selection + unit label + alpha acid badge (hops)
     tabContent.querySelectorAll('.ingredient-comp').forEach(sel => {
       sel.addEventListener('change', () => {
         const ingId = sel.dataset.id;
-        const comp = components.find(c => c.id === sel.value);
-        const unitLabel = sel.closest('.ingredient-row')?.querySelector('.ingredient-unit');
+        const comp  = components.find(c => c.id === sel.value);
+        const row   = sel.closest('.ingredient-row');
+
+        // Update unit label
+        const unitLabel = row?.querySelector('.ingredient-unit');
         if (unitLabel) unitLabel.textContent = comp?.unit || '';
+
+        // Update alpha acid badge for hop rows
+        if (row) {
+          const aa = comp?.alpha_acid ? parseFloat(comp.alpha_acid) : null;
+          let badge = row.querySelector('.hop-aa-badge');
+          if (aa !== null) {
+            if (badge) {
+              badge.textContent = `${aa}%α`;
+            } else {
+              badge = document.createElement('span');
+              badge.className = 'hop-aa-badge';
+              badge.style.cssText = 'font-size:10px;color:var(--accent-amber);white-space:nowrap;flex-shrink:0';
+              badge.textContent = `${aa}%α`;
+              // Insert before time input
+              const timeEl = row.querySelector('.ingredient-time');
+              if (timeEl) timeEl.insertAdjacentElement('beforebegin', badge);
+            }
+          } else if (badge) {
+            badge.remove();
+          }
+        }
+
         const ing = recipeIngredients.find(i => i.id === ingId);
         if (ing) ing.component_id = sel.value;
         isDirty = true;
@@ -353,22 +378,69 @@ function showRecipeEditor(recipe, pageContainer) {
       });
     });
 
-    // ── Volume auto-calculation (anchor = packaged_l) ────────────────────────
-    function recalcVolumes() {
-      const pk  = parseFloat(tabContent.querySelector('#vol-packaged')?.value) || 0;
-      const fml = parseFloat(tabContent.querySelector('#vol-ferm-loss')?.value || settings.fermenter_loss_pct || 5);
-      const bl  = parseFloat(tabContent.querySelector('#vol-brew-loss')?.value || settings.brew_loss_pct || 10);
-      if (!pk) return;
-      const fermenter = fml < 100 ? +(pk / (1 - fml / 100)).toFixed(1) : '';
-      const batch     = bl < 100 && fermenter ? +(fermenter / (1 - bl / 100)).toFixed(1) : '';
+    // ── Full water chain (anchor = packaged_l, calculates backwards) ─────────
+    function updateWaterChain() {
+      const getN = (sel, fallback = 0) => parseFloat(tabContent.querySelector(sel)?.value) || parseFloat(fallback) || 0;
+
+      const packaged = getN('[name=packaged_l]', recipeData.packaged_l);
+      const fermLoss = getN('#vol-ferm-loss', settings.fermenter_loss_pct) || 5;
+      const brewLoss = getN('#vol-brew-loss', settings.brew_loss_pct) || 10;
+      const hm       = getN('[name=hydromodule]', recipeData.hydromodule) || 3;
+      const boilMins = getN('[name=boil_time_min]', recipeData.boil_time_min) || 60;
+
+      // Equipment profile params
+      const selProfId = tabContent.querySelector('[name=equipment_profile_id]')?.value || recipeData.equipment_profile_id;
+      const sp = equipmentProfiles.find(p => p.id === selProfId);
+      const grainAbs  = parseFloat(sp?.grain_absorption   || settings.grain_absorption   || 1.0);
+      const boilPct   = parseFloat(sp?.boiloff_rate_pct   || settings.boiloff_rate_pct   || 10);
+      const shrinkPct = parseFloat(sp?.wort_shrinkage_pct || settings.wort_shrinkage_pct || 4);
+
+      // Grain kg from current ingredient list
+      const grainKg = recipeIngredients
+        .filter(i => i.stage_key === 'mash')
+        .reduce((s, i) => s + (parseFloat(i.qty) || 0), 0) / 1000;
+
+      if (!packaged) return;
+
+      // Reverse chain: packaged → fermenter → after boil → preboil → mash / sparge
+      const fermenter   = fermLoss < 100 ? +(packaged / (1 - fermLoss / 100)).toFixed(2) : 0;
+      const afterBoil   = brewLoss < 100 && fermenter ? +(fermenter / (1 - brewLoss / 100)).toFixed(2) : 0;
+      const divisor     = (1 - boilPct / 100 * (boilMins / 60)) * (1 - shrinkPct / 100);
+      const preboil     = afterBoil > 0 && divisor > 0 ? +(afterBoil / divisor).toFixed(2) : 0;
+      const mashWater   = grainKg > 0 ? +(grainKg * hm).toFixed(2) : 0;
+      const spargeWater = preboil > 0 && mashWater > 0
+        ? +(preboil - mashWater + grainKg * grainAbs).toFixed(2) : 0;
+
+      // Update hidden fermenter / batch_size fields
       const fermEl  = tabContent.querySelector('#vol-fermenter');
       const batchEl = tabContent.querySelector('#vol-batch');
-      if (fermEl)  { fermEl.value  = String(fermenter);  recipeData.fermenter_l  = String(fermenter); }
-      if (batchEl) { batchEl.value = String(batch);      recipeData.batch_size_l = String(batch); }
+      if (fermEl)  { fermEl.value  = fermenter  > 0 ? String(fermenter)  : ''; recipeData.fermenter_l  = String(fermenter); }
+      if (batchEl) { batchEl.value = afterBoil  > 0 ? String(afterBoil)  : ''; recipeData.batch_size_l = String(afterBoil); }
+
+      // Fill water chain fields
+      const fill = (sel, val, key) => {
+        const el = tabContent.querySelector(sel);
+        if (!el) return;
+        const v = val > 0 ? String(val) : '';
+        el.value = v;
+        recipeData[key] = v;
+        // Mismatch: field was already set to a different value before auto-fill
+        el.classList.toggle('wc-mismatch', false); // cleared — values are now consistent
+      };
+      fill('[name=after_boil_l]',   afterBoil,   'after_boil_l');
+      if (preboil    > 0) fill('[name=water_total_l]',  preboil,     'water_total_l');
+      if (mashWater  > 0) fill('[name=water_mash_l]',   mashWater,   'water_mash_l');
+      if (spargeWater > 0) fill('[name=water_sparge_l]', spargeWater, 'water_sparge_l');
     }
-    ['#vol-packaged','#vol-brew-loss','#vol-ferm-loss'].forEach(sel => {
-      tabContent.querySelector(sel)?.addEventListener('input', recalcVolumes);
+
+    // Trigger on any volume-affecting field change
+    ['[name=packaged_l]','#vol-brew-loss','#vol-ferm-loss',
+     '[name=hydromodule]','[name=boil_time_min]'].forEach(sel => {
+      tabContent.querySelector(sel)?.addEventListener('input', updateWaterChain);
     });
+
+    // Re-run if equipment profile changes (different boiloff params)
+    tabContent.querySelector('[name=equipment_profile_id]')?.addEventListener('change', updateWaterChain);
 
     // ── BJCP style selector → auto-fill target ranges ──────────────────────────
     tabContent.querySelector('#bjcp-style-select')?.addEventListener('change', (e) => {
