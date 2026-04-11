@@ -128,13 +128,14 @@ export function calcBrewWater(packaged_l, params = {}, boil_time_min = 60, grain
 // og: wort OG (e.g. 1.050), vol_l: batch volume (litres, post-boil)
 export function calcIBUTinseth(grams, aa, time_min, og, vol_l) {
   const g  = parseFloat(grams)    || 0;
-  const a  = (parseFloat(aa)      || 0) / 100;
+  const a  = parseFloat(aa)       || 0;   // alpha acid in % (e.g. 12, not 0.12)
   const t  = parseFloat(time_min) || 0;
   const OG = parseFloat(og)       || 1.050;
   const L  = parseFloat(vol_l)    || 20;
   if (!g || !a || !t) return 0;
   const bigness = 1.65 * Math.pow(0.000125, OG - 1);
   const util    = (1 - Math.exp(-0.04 * t)) / 4.15;
+  // IBU = (oz_hops × AA% × utilization × 74.89) / volume_US_gal
   return Math.round(((g / 28.35) * a * bigness * util * 74.89 / (L / 3.785)) * 10) / 10;
 }
 
