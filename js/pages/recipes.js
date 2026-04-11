@@ -2,7 +2,7 @@
 import { getRows, appendRow, appendRows, updateRow, softDelete, genId, now } from '../sheets.js';
 import { getSettings } from '../sheets.js';
 import { BJCP_STYLES, getBjcpGroups, sgToBrix, brixToSg, MASH_PRESETS } from '../bjcp.js';
-import { BREWING_SALTS, WATER_PROFILES, getStyleWaterProfile, calcWaterProfile } from '../water.js';
+import { BREWING_SALTS, WATER_PROFILES, getStyleWaterProfile, calcWaterProfile, calcIBUTinseth, calcEBC } from '../water.js';
 import { calcABV, calcCOGS, calcOnHand, formatCurrency, escHtml, generateBeerSteps, generateSpiritSteps, getEffectivePrice } from '../utils.js';
 import { showModal, closeModal, showConfirm, showToast, showLoading, showError,
   renderTabs, pageHeader, formField, textInput, numberInput, selectInput, textareaInput, collectForm } from '../ui.js';
@@ -14,19 +14,21 @@ let ingredients = [];
 let mashRests = [];
 let inventory = [];
 let settings = {};
+let equipmentProfiles = [];
 let recipeType = 'beer';
 
 export async function renderRecipes(container, type = 'beer') {
   recipeType = type;
   showLoading(container);
   try {
-    [components, recipes, ingredients, mashRests, inventory, settings] = await Promise.all([
+    [components, recipes, ingredients, mashRests, inventory, settings, equipmentProfiles] = await Promise.all([
       getRows('Components'),
       getRows('Recipes'),
       getRows('RecipeIngredients'),
       getRows('RecipeMashRests'),
       getRows('Inventory'),
       getSettings(),
+      getRows('BrewingProfiles'),
     ]);
     _renderList(container);
   } catch (e) {
@@ -187,9 +189,10 @@ function showRecipeEditor(recipe, pageContainer) {
     tabContent.querySelectorAll('[name]').forEach(el => {
       el.addEventListener('change', () => {
         // OG/FG: convert Brix → SG when in Brix mode
-        if (el.name === 'og_target' && el.dataset.unit === 'brix' && el.value) {
+        const ogfgUnit = recipeData._ogfgUnit || el.dataset.unit || 'sg';
+        if (el.name === 'og_target' && ogfgUnit === 'brix' && el.value) {
           recipeData.og_target = String(brixToSg(parseFloat(el.value)));
-        } else if (el.name === 'fg_target' && el.dataset.unit === 'brix' && el.value) {
+        } else if (el.name === 'fg_target' && ogfgUnit === 'brix' && el.value) {
           recipeData.fg_target = String(brixToSg(parseFloat(el.value)));
         } else {
           recipeData[el.name] = el.value;
@@ -204,19 +207,7 @@ function showRecipeEditor(recipe, pageContainer) {
           const statAbv = tabContent.querySelector('#stat-abv');
           if (statAbv) statAbv.textContent = (abv || '—') + '%';
         }
-        // Update IBU/EBC stat blocks from manual inputs
-        if (el.name === '_ibu_manual') {
-          recipeData.ibu_estimated = el.value;
-          const hiddenIbu = tabContent.querySelector('#inp-ibu-estimated');
-          if (hiddenIbu) hiddenIbu.value = el.value;
-          const statIbu = tabContent.querySelector('#stat-ibu');
-          if (statIbu) statIbu.textContent = el.value || '—';
-        }
-        if (el.name === '_ebc_manual') {
-          recipeData.ebc_estimated = el.value;
-          const statEbc = tabContent.querySelector('#stat-ebc');
-          if (statEbc) statEbc.textContent = el.value || '—';
-        }
+        // (manual IBU/EBC inputs removed — auto-calculated from ingredients)
       });
     });
 
@@ -251,18 +242,22 @@ function showRecipeEditor(recipe, pageContainer) {
           sort_order: String(recipeIngredients.filter(i => i.stage_key === 'fermentation').length),
           created_at: now(),
         });
-        // Auto-fill temp/days from notes if parseable (e.g. "18-20°C, 14 дней")
+        // Auto-fill temp/days from structured fields or notes
         const yeastComp = components.find(c => c.id === yeastId);
-        if (yeastComp?.notes) {
-          const tempMatch = yeastComp.notes.match(/(\d+)[-–]?(\d*)[\s°]*[Cc°]/);
-          const daysMatch = yeastComp.notes.match(/(\d+)\s*д(ней|ня|ень)/i);
-          if (tempMatch && !recipeData.ferment_temp_c) {
-            recipeData.ferment_temp_c = tempMatch[1];
+        if (yeastComp) {
+          if (yeastComp.ferment_temp_min) {
+            recipeData.ferment_temp_c = yeastComp.ferment_temp_min;
             isDirty = true;
+          } else if (yeastComp.notes) {
+            const tempMatch = yeastComp.notes.match(/(\d+)[-–]?(\d*)[\s°]*[Cc°]/);
+            if (tempMatch) { recipeData.ferment_temp_c = tempMatch[1]; isDirty = true; }
           }
-          if (daysMatch && !recipeData.ferment_days) {
-            recipeData.ferment_days = daysMatch[1];
+          if (yeastComp.ferment_days_typical) {
+            recipeData.ferment_days = yeastComp.ferment_days_typical;
             isDirty = true;
+          } else if (yeastComp.notes) {
+            const daysMatch = yeastComp.notes.match(/(\d+)\s*д(ней|ня|ень)/i);
+            if (daysMatch) { recipeData.ferment_days = daysMatch[1]; isDirty = true; }
           }
         }
       }
@@ -352,26 +347,26 @@ function showRecipeEditor(recipe, pageContainer) {
           isDirty = true;
           // Update data-type on the row for live CSS coloring
           if (field === 'rest_type') {
-            input.closest('.mash-rest-row')?.setAttribute('data-type', input.value);
+            (input.closest('.mash-block') || input.closest('.mash-rest-row'))?.setAttribute('data-type', input.value);
           }
         }
       });
     });
 
-    // ── Volume auto-calculation (anchor = fermenter_l) ───────────────────────
+    // ── Volume auto-calculation (anchor = packaged_l) ────────────────────────
     function recalcVolumes() {
-      const fl  = parseFloat(tabContent.querySelector('#vol-fermenter')?.value) || 0;
-      const bl  = parseFloat(tabContent.querySelector('#vol-brew-loss')?.value || settings.brew_loss_pct || 10);
+      const pk  = parseFloat(tabContent.querySelector('#vol-packaged')?.value) || 0;
       const fml = parseFloat(tabContent.querySelector('#vol-ferm-loss')?.value || settings.fermenter_loss_pct || 5);
-      if (!fl) return;
-      const batch    = bl < 100 ? (fl / (1 - bl / 100)).toFixed(1) : '';
-      const packaged = (fl * (1 - fml / 100)).toFixed(1);
-      const batchEl   = tabContent.querySelector('#vol-batch');
-      const packedEl  = tabContent.querySelector('#vol-packaged');
-      if (batchEl)  { batchEl.value  = batch;    recipeData.batch_size_l = batch; }
-      if (packedEl) { packedEl.value = packaged;  recipeData.packaged_l   = packaged; }
+      const bl  = parseFloat(tabContent.querySelector('#vol-brew-loss')?.value || settings.brew_loss_pct || 10);
+      if (!pk) return;
+      const fermenter = fml < 100 ? +(pk / (1 - fml / 100)).toFixed(1) : '';
+      const batch     = bl < 100 && fermenter ? +(fermenter / (1 - bl / 100)).toFixed(1) : '';
+      const fermEl  = tabContent.querySelector('#vol-fermenter');
+      const batchEl = tabContent.querySelector('#vol-batch');
+      if (fermEl)  { fermEl.value  = String(fermenter);  recipeData.fermenter_l  = String(fermenter); }
+      if (batchEl) { batchEl.value = String(batch);      recipeData.batch_size_l = String(batch); }
     }
-    ['#vol-fermenter','#vol-brew-loss','#vol-ferm-loss'].forEach(sel => {
+    ['#vol-packaged','#vol-brew-loss','#vol-ferm-loss'].forEach(sel => {
       tabContent.querySelector(sel)?.addEventListener('input', recalcVolumes);
     });
 
@@ -404,29 +399,49 @@ function showRecipeEditor(recipe, pageContainer) {
       renderView();
     });
 
-    // ── OG / FG unit toggles ──────────────────────────────────────────────────
-    tabContent.querySelector('.btn-og-sg')?.addEventListener('click', () => {
-      if ((recipeData._og_unit || 'sg') === 'brix') {
-        const v = tabContent.querySelector('[name=og_target]')?.value;
-        if (v) recipeData.og_target = String(brixToSg(parseFloat(v)));
+    // ── Shared OG/FG unit toggle ───────────────────────────────────────────────
+    tabContent.querySelector('.btn-unit-sg')?.addEventListener('click', () => {
+      if ((recipeData._ogfgUnit || 'sg') === 'brix') {
+        const ogEl = tabContent.querySelector('[name=og_target]');
+        const fgEl = tabContent.querySelector('[name=fg_target]');
+        if (ogEl?.value) recipeData.og_target = String(brixToSg(parseFloat(ogEl.value)));
+        if (fgEl?.value) recipeData.fg_target = String(brixToSg(parseFloat(fgEl.value)));
       }
-      recipeData._og_unit = 'sg';
+      recipeData._ogfgUnit = 'sg';
       renderView();
     });
-    tabContent.querySelector('.btn-og-brix')?.addEventListener('click', () => {
-      recipeData._og_unit = 'brix';
+    tabContent.querySelector('.btn-unit-brix')?.addEventListener('click', () => {
+      recipeData._ogfgUnit = 'brix';
       renderView();
     });
-    tabContent.querySelector('.btn-fg-sg')?.addEventListener('click', () => {
-      if ((recipeData._fg_unit || 'sg') === 'brix') {
-        const v = tabContent.querySelector('[name=fg_target]')?.value;
-        if (v) recipeData.fg_target = String(brixToSg(parseFloat(v)));
-      }
-      recipeData._fg_unit = 'sg';
+    // keep legacy beer-tab toggle handlers for spirit tab
+    tabContent.querySelector('.btn-og-sg')?.addEventListener('click', () => { recipeData._ogfgUnit = 'sg'; renderView(); });
+    tabContent.querySelector('.btn-og-brix')?.addEventListener('click', () => { recipeData._ogfgUnit = 'brix'; renderView(); });
+    tabContent.querySelector('.btn-fg-sg')?.addEventListener('click', () => { recipeData._ogfgUnit = 'sg'; renderView(); });
+    tabContent.querySelector('.btn-fg-brix')?.addEventListener('click', () => { recipeData._ogfgUnit = 'brix'; renderView(); });
+
+    // ── Description toggle ─────────────────────────────────────────────────────
+    tabContent.querySelector('.btn-desc-toggle')?.addEventListener('click', () => {
+      // save any current description text before toggling
+      const descEl = tabContent.querySelector('[name=description]');
+      if (descEl) recipeData.description = descEl.value;
+      recipeData._descOpen = !recipeData._descOpen;
       renderView();
     });
-    tabContent.querySelector('.btn-fg-brix')?.addEventListener('click', () => {
-      recipeData._fg_unit = 'brix';
+
+    // ── Equipment profile selector ─────────────────────────────────────────────
+    tabContent.querySelector('#equipment-profile-select')?.addEventListener('change', (e) => {
+      recipeData.equipment_profile_id = e.target.value;
+      isDirty = true;
+    });
+
+    // ── Mash preset selector (in header) ──────────────────────────────────────
+    tabContent.querySelector('.mash-preset-select')?.addEventListener('change', (e) => {
+      const key = e.target.value;
+      if (!key) return;
+      if (recipeMashRests.length > 0 && !confirm('Заменить текущие паузы шаблоном?')) { e.target.value = ''; return; }
+      loadMashPreset(key, recipeMashRests);
+      e.target.value = '';
       renderView();
     });
 
@@ -552,9 +567,10 @@ function showRecipeEditor(recipe, pageContainer) {
     // water_additions is managed separately via recipeData directly — don't overwrite
     overlay.querySelectorAll('[name]').forEach(el => {
       if (el.name === 'water_additions') return; // managed via recipeData
-      if (el.name === 'og_target' && el.dataset.unit === 'brix' && el.value) {
+      const saveUnit = recipeData._ogfgUnit || el.dataset.unit || 'sg';
+      if (el.name === 'og_target' && saveUnit === 'brix' && el.value) {
         recipeData.og_target = String(brixToSg(parseFloat(el.value)));
-      } else if (el.name === 'fg_target' && el.dataset.unit === 'brix' && el.value) {
+      } else if (el.name === 'fg_target' && saveUnit === 'brix' && el.value) {
         recipeData.fg_target = String(brixToSg(parseFloat(el.value)));
       } else {
         recipeData[el.name] = el.value;
@@ -640,24 +656,117 @@ function showRecipeEditor(recipe, pageContainer) {
   }
 }
 
+// ─── EBC → approximate hex colour ────────────────────────────────────────────
+function ebcToHex(ebc) {
+  const e = parseFloat(ebc) || 0;
+  if (e <=  4) return '#F8F4B4';
+  if (e <=  8) return '#FBE27A';
+  if (e <= 16) return '#F5B235';
+  if (e <= 30) return '#E07B10';
+  if (e <= 60) return '#C04A00';
+  if (e <= 120) return '#8B2500';
+  if (e <= 300) return '#5A1000';
+  return '#2E0800';
+}
+
+// ─── Grain bill rows ──────────────────────────────────────────────────────────
+function renderGrainRows(grains, totalGrainG) {
+  if (!grains.length) return '<p class="text-muted" style="font-size:12px;padding:4px 0">Нет солода</p>';
+  const grainComps = components.filter(c => ['malt','grain_distill','sugar','other'].includes(c.type) && c.is_active !== 'FALSE');
+  return grains.map(ing => {
+    const comp = components.find(c => c.id === ing.component_id);
+    const qty  = parseFloat(ing.qty) || 0;
+    const pct  = totalGrainG > 0 ? Math.round(qty / totalGrainG * 100) : 0;
+    const ebc  = parseFloat(comp?.ebc) || 0;
+    const hex  = ebcToHex(ebc);
+    return `
+      <div class="ingredient-row">
+        <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" style="flex:2">
+          ${grainComps.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
+        </select>
+        <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}"
+          value="${escHtml(ing.qty||'')}" placeholder="г" step="50" style="width:80px">
+        <span class="ingredient-unit text-muted">г</span>
+        ${ebc > 0 ? `<span class="grain-ebc-chip" style="background:${hex}22;color:${hex};border:1px solid ${hex}55;border-radius:4px;padding:1px 5px;font-size:10px;white-space:nowrap;flex-shrink:0">${ebc}EBC</span>` : ''}
+        <span class="text-muted" style="font-size:10px;min-width:28px;text-align:right;flex-shrink:0">${pct}%</span>
+        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}">✕</button>
+      </div>`;
+  }).join('');
+}
+
+// ─── Hop rows (boil / whirlpool) ─────────────────────────────────────────────
+function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = false) {
+  if (!hops.length) return `<p class="text-muted" style="font-size:12px;padding:4px 0">Нет хмеля</p>`;
+  const hopComps = components.filter(c => c.type === 'hop' && c.is_active !== 'FALSE');
+  const rowCls   = isWhirlpool ? 'hop-row-whirlpool' : 'hop-row-boil';
+  return hops.map(ing => {
+    const comp = components.find(c => c.id === ing.component_id);
+    const aa   = comp?.alpha_acid ? parseFloat(comp.alpha_acid) : null;
+    const ibu  = (!isWhirlpool && aa && ing.qty && ing.time_meta)
+      ? calcIBUTinseth(ing.qty, aa, ing.time_meta, og, batchVol)
+      : 0;
+    return `
+      <div class="ingredient-row ${rowCls}">
+        <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" style="flex:2">
+          ${hopComps.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
+        </select>
+        <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"
+          value="${escHtml(ing.qty||'')}" placeholder="г" step="5" style="width:70px">
+        <span class="ingredient-unit text-muted">г</span>
+        ${aa !== null ? `<span class="hop-aa-badge" style="font-size:10px;color:var(--accent-amber);white-space:nowrap;flex-shrink:0">${aa}%α</span>` : ''}
+        <input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"
+          value="${escHtml(ing.time_meta||'')}" placeholder="${isWhirlpool?'мин':'мин'}" step="5" style="width:62px">
+        ${ibu > 0 ? `<span style="font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0">${ibu}IBU</span>` : ''}
+        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
+      </div>`;
+  }).join('');
+}
+
+// ─── Mash pause blocks ────────────────────────────────────────────────────────
+function renderMashBlocks(rests) {
+  if (!rests.length) return '<p class="text-muted" style="font-size:12px;padding:4px 0">Нет пауз. Добавьте или выберите шаблон.</p>';
+  return rests.map((r, i) => `
+    <div class="mash-block" data-type="${escHtml(r.rest_type||'rest')}">
+      <div class="mash-block-header">
+        <input type="text" class="form-control mash-rest-field" data-idx="${i}" data-field="name"
+          value="${escHtml(r.name||'Осахаривание')}" placeholder="Название паузы">
+        <button type="button" class="btn btn-sm btn-danger btn-remove-rest" data-idx="${i}">✕</button>
+      </div>
+      <div class="mash-block-params">
+        <div class="mash-block-param">
+          <span class="text-muted" style="font-size:11px">🌡</span>
+          <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="temp_c"
+            value="${escHtml(r.temp_c||'65')}" style="width:58px" step="1">
+          <span class="text-muted" style="font-size:11px">°C</span>
+        </div>
+        <div class="mash-block-param">
+          <span class="text-muted" style="font-size:11px">⏱</span>
+          <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="duration_min"
+            value="${escHtml(r.duration_min||'60')}" style="width:58px" step="5">
+          <span class="text-muted" style="font-size:11px">мин</span>
+        </div>
+        <select class="form-control mash-rest-field" data-idx="${i}" data-field="rest_type" style="width:96px">
+          <option value="rest"      ${r.rest_type==='rest'      ?'selected':''}>Пауза</option>
+          <option value="decoction" ${r.rest_type==='decoction' ?'selected':''}>Декокция</option>
+        </select>
+      </div>
+    </div>`).join('');
+}
+
 // ─── Beer Grid Layout (desktop: 3 columns) ───────────────────────────────────
 function renderBeerGrid(container, data, ingredients, mashRests) {
-  const ogUnit = data._og_unit || 'sg';
-  const fgUnit = data._fg_unit || 'sg';
-  const ogSgVal = data.og_target || '';
-  const fgSgVal = data.fg_target || '';
-  const ogDisplayVal = ogUnit === 'sg' ? ogSgVal : (ogSgVal ? String(sgToBrix(parseFloat(ogSgVal))) : '');
-  const fgDisplayVal = fgUnit === 'sg' ? fgSgVal : (fgSgVal ? String(sgToBrix(parseFloat(fgSgVal))) : '');
-  const ogAlt = ogUnit === 'sg' && ogSgVal ? `≈ ${sgToBrix(parseFloat(ogSgVal))} °Bx` : ogUnit === 'brix' && ogSgVal ? `≈ SG ${parseFloat(ogSgVal).toFixed(3)}` : '';
-  const fgAlt = fgUnit === 'sg' && fgSgVal ? `≈ ${sgToBrix(parseFloat(fgSgVal))} °Bx` : fgUnit === 'brix' && fgSgVal ? `≈ SG ${parseFloat(fgSgVal).toFixed(3)}` : '';
+  const unit     = data._ogfgUnit || 'sg';   // shared OG/FG unit
+  const ogSgVal  = data.og_target || '';
+  const fgSgVal  = data.fg_target || '';
+  const ogDisp   = unit === 'sg' ? ogSgVal : (ogSgVal ? String(sgToBrix(parseFloat(ogSgVal))) : '');
+  const fgDisp   = unit === 'sg' ? fgSgVal : (fgSgVal ? String(sgToBrix(parseFloat(fgSgVal))) : '');
   const selectedStyle = data.style ? BJCP_STYLES.find(s => s.name === data.style) : null;
   const bjcpOptions = Object.entries(getBjcpGroups()).map(([cat, styles]) => `
     <optgroup label="${escHtml(cat)}">
-      ${styles.map(s => `<option value="${escHtml(s.name)}" data-code="${s.code}" ${data.style === s.name ? 'selected' : ''}>${s.code} — ${escHtml(s.name)}</option>`).join('')}
-    </optgroup>
-  `).join('');
+      ${styles.map(s => `<option value="${escHtml(s.name)}" ${data.style === s.name ? 'selected' : ''}>${s.code} — ${escHtml(s.name)}</option>`).join('')}
+    </optgroup>`).join('');
   const togBtn = (cls, label, active) =>
-    `<button type="button" class="btn ${cls}" style="padding:1px 8px;font-size:0.78em;border-radius:${cls.includes('sg')?'4px 0 0 4px':'0 4px 4px 0'};background:${active?'var(--accent)':'var(--bg-secondary)'};color:${active?'#fff':'var(--text-muted)'};border:1px solid var(--border);${cls.includes('brix')?'border-left:none;':''}cursor:pointer">${label}</button>`;
+    `<button type="button" class="btn ${cls}" style="padding:1px 8px;font-size:0.78em;border-radius:${cls.includes('sg')||cls.includes('unit-sg')?'4px 0 0 4px':'0 4px 4px 0'};background:${active?'var(--accent)':'var(--bg-secondary)'};color:${active?'#fff':'var(--text-muted)'};border:1px solid var(--border);${!cls.includes('sg')&&!cls.includes('unit-sg')?'border-left:none;':''}cursor:pointer">${label}</button>`;
 
   // Water chemistry
   let waterAdditions = [];
@@ -666,134 +775,162 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   const waterIons = calcWaterProfile(waterAdditions, waterVol);
   const recommendedProfile = getStyleWaterProfile(data.style);
   const currentProfile = data.water_profile || '';
-
   function ionPpm(v) { return v > 0 ? Math.round(v) : '0'; }
 
-  const grains = ingredients.filter(i => i.stage_key === 'mash');
-  const boilHops = ingredients.filter(i => i.stage_key === 'boil');
-  const whirlpool = ingredients.filter(i => i.stage_key === 'whirlpool');
+  // Ingredient groups
+  const grains       = ingredients.filter(i => i.stage_key === 'mash');
+  const boilHops     = ingredients.filter(i => i.stage_key === 'boil');
+  const whirlpool    = ingredients.filter(i => i.stage_key === 'whirlpool');
   const fermentItems = ingredients.filter(i => i.stage_key === 'fermentation');
-  const dryHops = ingredients.filter(i => i.stage_key === 'dry_hop');
-  const packItems = ingredients.filter(i => i.stage_key === 'packaging');
+  const dryHops      = ingredients.filter(i => i.stage_key === 'dry_hop');
+  const packItems    = ingredients.filter(i => i.stage_key === 'packaging');
+
+  // Auto-calc IBU (Tinseth) and EBC (Morey)
+  const batchVol = parseFloat(data.batch_size_l) || parseFloat(data.fermenter_l) || 20;
+  const og       = parseFloat(data.og_target) || 1.050;
+  let autoIBU = 0; let hasAlpha = false;
+  for (const hop of boilHops) {
+    const comp = components.find(c => c.id === hop.component_id);
+    if (comp?.alpha_acid) { hasAlpha = true; autoIBU += calcIBUTinseth(hop.qty, comp.alpha_acid, hop.time_meta, og, batchVol); }
+  }
+  if (hasAlpha) data.ibu_estimated = String(Math.round(autoIBU));
+  const grainData = grains.map(g => { const c = components.find(x => x.id === g.component_id); return { qty_g: parseFloat(g.qty)||0, ebc: parseFloat(c?.ebc)||0 }; }).filter(g => g.qty_g > 0 && g.ebc > 0);
+  if (grainData.length > 0) { const autoEBC = calcEBC(grainData, batchVol); if (autoEBC > 0) data.ebc_estimated = String(autoEBC); }
+
+  // Grain totals
+  const totalGrainG = grains.reduce((s, g) => s + (parseFloat(g.qty)||0), 0);
+
+  // Equipment profiles
+  const beerProfs  = equipmentProfiles.filter(p => p.type === 'beer' && p.is_active !== 'FALSE');
+  const profOpts   = beerProfs.map(p => `<option value="${escHtml(p.id)}" ${data.equipment_profile_id===p.id?'selected':''}>${escHtml(p.name)}</option>`).join('');
+
+  // Current yeast
+  const currentYeast     = fermentItems.find(i => components.find(c => c.id === i.component_id)?.type === 'yeast');
+  const currentYeastComp = currentYeast ? components.find(c => c.id === currentYeast.component_id) : null;
+  const yeastComps       = components.filter(c => c.type === 'yeast' && c.is_active !== 'FALSE');
+
+  const activeTab = data._activeTab || 'overview';
 
   container.innerHTML = `
   <div class="recipe-mobile-tabs" role="tablist">
-    <button class="rmt-tab active" data-tab="overview">Обзор</button>
-    <button class="rmt-tab" data-tab="water">Вода</button>
-    <button class="rmt-tab" data-tab="grain">Засыпь</button>
-    <button class="rmt-tab" data-tab="mash">Затирание</button>
-    <button class="rmt-tab" data-tab="boil">Кипячение</button>
-    <button class="rmt-tab" data-tab="fermentation">Брожение</button>
-    <button class="rmt-tab" data-tab="packaging">Упаковка</button>
+    ${['overview','water','grain','mash','boil','fermentation','packaging'].map(t =>
+      `<button class="rmt-tab${t===activeTab?' active':''}" data-tab="${t}">${{overview:'Обзор',water:'Вода',grain:'Засыпь',mash:'Затирание',boil:'Кипячение',fermentation:'Брожение',packaging:'Упаковка'}[t]}</button>`
+    ).join('')}
   </div>
-  <div class="recipe-editor-grid" data-active-tab="overview">
+  <div class="recipe-editor-grid" data-active-tab="${activeTab}">
 
-  <!-- ── Column 1: Overview + Water ─────────────────────────────────────── -->
+  <!-- ── Col 1: Overview + Water ───────────────────────────────────────── -->
   <div class="recipe-editor-col">
 
     <div class="section-card" data-section="overview">
       <div class="section-card-header"><h4>📋 Обзор</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
-          ${formField('Название', `<input type="text" name="name" class="form-control" value="${escHtml(data.name||'')}">`, '', true)}
-          <div class="form-group">
-            <label class="form-label">Стиль BJCP</label>
-            <select name="style" class="form-control" id="bjcp-style-select">
-              <option value="">— не выбран —</option>
-              ${bjcpOptions}
-            </select>
-          </div>
-          ${selectedStyle ? `
-            <div style="display:flex;gap:10px;flex-wrap:wrap;padding:6px 10px;background:var(--bg-secondary);border-radius:6px;font-size:0.82em;border-left:3px solid var(--accent)">
-              <span class="text-muted">${escHtml(selectedStyle.code)}:</span>
-              ${selectedStyle.og  ? `<span>OG <b>${selectedStyle.og[0]}–${selectedStyle.og[1]}</b></span>` : ''}
-              ${selectedStyle.fg  ? `<span>FG <b>${selectedStyle.fg[0]}–${selectedStyle.fg[1]}</b></span>` : ''}
-              ${selectedStyle.ibu ? `<span>IBU <b>${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</b></span>` : ''}
-              ${selectedStyle.ebc ? `<span>EBC <b>${selectedStyle.ebc[0]}–${selectedStyle.ebc[1]}</b></span>` : ''}
-              ${selectedStyle.abv ? `<span>ABV <b>${selectedStyle.abv[0]}–${selectedStyle.abv[1]}%</b></span>` : ''}
+
+          <!-- Label + Name row -->
+          <div class="overview-top">
+            <div class="overview-label-wrap">
+              ${data.label_image
+                ? `<img src="${data.label_image}" class="overview-label-img btn-upload-label" title="Нажмите для замены" style="cursor:pointer">`
+                : `<div class="overview-label-placeholder btn-upload-label">📷</div>`}
+              <input type="file" id="label-upload" accept="image/jpeg,image/png,image/webp" style="display:none">
+              <input type="hidden" name="label_image" value="${escHtml(data.label_image||'')}">
+              ${data.label_image ? `<button type="button" class="btn btn-xs btn-danger btn-clear-label" style="margin-top:4px;font-size:10px;width:100%">✕</button>` : ''}
             </div>
-          ` : ''}
+            <div class="overview-name-wrap">
+              <input type="text" name="name" class="form-control overview-name-input" value="${escHtml(data.name||'')}" placeholder="Название рецепта *">
+              <div style="display:flex;gap:5px;align-items:center;margin-top:5px">
+                <select name="style" class="form-control" id="bjcp-style-select" style="flex:1">
+                  <option value="">— стиль —</option>
+                  ${bjcpOptions}
+                </select>
+                <button type="button" class="btn btn-sm btn-secondary btn-desc-toggle" title="Описание" style="flex-shrink:0;padding:4px 8px">ℹ</button>
+              </div>
+              ${data._descOpen ? `<textarea name="description" class="form-control" rows="2" style="margin-top:5px">${escHtml(data.description||'')}</textarea>` : `<input type="hidden" name="description" value="${escHtml(data.description||'')}">`}
+            </div>
+          </div>
+
+          <!-- Style ranges -->
+          ${selectedStyle ? `<div class="style-ranges-bar">
+            <span class="text-muted" style="font-size:10px">${escHtml(selectedStyle.code)}</span>
+            ${selectedStyle.og  ?`<span>OG ${selectedStyle.og[0]}–${selectedStyle.og[1]}</span>`:''}
+            ${selectedStyle.fg  ?`<span>FG ${selectedStyle.fg[0]}–${selectedStyle.fg[1]}</span>`:''}
+            ${selectedStyle.ibu ?`<span>IBU ${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</span>`:''}
+            ${selectedStyle.ebc ?`<span>EBC ${selectedStyle.ebc[0]}–${selectedStyle.ebc[1]}</span>`:''}
+            ${selectedStyle.abv ?`<span>ABV ${selectedStyle.abv[0]}–${selectedStyle.abv[1]}%</span>`:''}
+          </div>` : ''}
+
+          <!-- Stats -->
+          <div class="overview-stats-row">
+            <div class="recipe-stat-block">
+              <div class="recipe-stat-value stat-abv" id="stat-abv">${escHtml(data.abv_estimated||calcABV(data.og_target,data.fg_target)||'—')}%</div>
+              <div class="recipe-stat-label">ABV${selectedStyle?.abv?`<span class="recipe-stat-target"> ${selectedStyle.abv[0]}–${selectedStyle.abv[1]}%</span>`:''}</div>
+            </div>
+            <div class="recipe-stat-block">
+              <div class="recipe-stat-value stat-ibu" id="stat-ibu">${escHtml(data.ibu_estimated||'—')}</div>
+              <div class="recipe-stat-label">IBU${selectedStyle?.ibu?`<span class="recipe-stat-target"> ${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</span>`:''}</div>
+            </div>
+            <div class="recipe-stat-block">
+              <div class="recipe-stat-value stat-ebc" id="stat-ebc">${escHtml(data.ebc_estimated||'—')}</div>
+              <div class="recipe-stat-label">EBC${selectedStyle?.ebc?`<span class="recipe-stat-target"> ${selectedStyle.ebc[0]}–${selectedStyle.ebc[1]}</span>`:''}</div>
+            </div>
+          </div>
+          <input type="hidden" name="abv_estimated" id="inp-abv-estimated" value="${escHtml(data.abv_estimated||calcABV(data.og_target,data.fg_target)||'')}">
+          <input type="hidden" name="ibu_estimated" value="${escHtml(data.ibu_estimated||'')}">
+          <input type="hidden" name="ebc_estimated" value="${escHtml(data.ebc_estimated||'')}">
+
+          <!-- OG/FG shared unit toggle -->
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-bottom:3px">
+            <span style="font-size:10px;color:var(--text-muted)">OG/FG:</span>
+            ${togBtn('btn-unit-sg','SG',unit==='sg')}${togBtn('btn-unit-brix','°Bx',unit==='brix')}
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label">OG ${unit==='brix'&&ogSgVal?`<span class="text-muted" style="font-weight:400">≈ SG ${ogSgVal}</span>`:''}</label>
+              <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">FG ${unit==='brix'&&fgSgVal?`<span class="text-muted" style="font-weight:400">≈ SG ${fgSgVal}</span>`:''}</label>
+              <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
+            </div>
+          </div>
+
+          <!-- Volumes: packaged_l anchor -->
           <div class="form-row-3">
             <div class="form-group">
-              <label class="form-label">В ферментёр (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
-              <input type="number" name="fermenter_l" class="form-control" id="vol-fermenter" value="${escHtml(data.fermenter_l||'')}" step="0.1" placeholder="20">
+              <label class="form-label">Упаковка (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
+              <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
             </div>
             <div class="form-group">
-              <label class="form-label">Потери варки %</label>
+              <label class="form-label">% потерь варки</label>
               <input type="number" name="brew_loss_pct" class="form-control" id="vol-brew-loss" value="${escHtml(data.brew_loss_pct||'')}" step="0.5" placeholder="${escHtml(settings.brew_loss_pct||'10')}">
             </div>
             <div class="form-group">
-              <label class="form-label">Потери ферм. %</label>
+              <label class="form-label">% потерь ферм.</label>
               <input type="number" name="fermenter_loss_pct" class="form-control" id="vol-ferm-loss" value="${escHtml(data.fermenter_loss_pct||'')}" step="0.5" placeholder="${escHtml(settings.fermenter_loss_pct||'5')}">
             </div>
           </div>
           <div class="form-row-2">
             <div class="form-group">
-              <label class="form-label" style="color:var(--text-muted)">Объём варки (л) <span style="font-size:0.78em">авто</span></label>
-              <input type="number" name="batch_size_l" class="form-control" id="vol-batch" value="${escHtml(data.batch_size_l||'')}" step="0.1" style="background:var(--bg-secondary)">
+              <label class="form-label" style="color:var(--text-muted)">В ферментёр (авто)</label>
+              <input type="number" name="fermenter_l" class="form-control" id="vol-fermenter" value="${escHtml(data.fermenter_l||'')}" step="0.5" style="background:var(--bg-secondary)" readonly>
             </div>
             <div class="form-group">
-              <label class="form-label" style="color:var(--text-muted)">Упаковка (л) <span style="font-size:0.78em">авто</span></label>
-              <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.1" style="background:var(--bg-secondary)">
+              <label class="form-label" style="color:var(--text-muted)">Объём варки (авто)</label>
+              <input type="number" name="batch_size_l" class="form-control" id="vol-batch" value="${escHtml(data.batch_size_l||'')}" step="0.5" style="background:var(--bg-secondary)" readonly>
             </div>
           </div>
-          <!-- Stat blocks: ABV / IBU / EBC -->
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:8px 0 4px">
-            <div class="recipe-stat-block">
-              <div class="recipe-stat-value stat-abv" id="stat-abv">${escHtml(data.abv_estimated||calcABV(data.og_target,data.fg_target)||'—')}%</div>
-              <div class="recipe-stat-label">ABV</div>
-              ${selectedStyle?.abv ? `<div class="recipe-stat-target">${selectedStyle.abv[0]}–${selectedStyle.abv[1]}%</div>` : ''}
-            </div>
-            <div class="recipe-stat-block">
-              <div class="recipe-stat-value stat-ibu" id="stat-ibu">${escHtml(data.ibu_estimated||'—')}</div>
-              <div class="recipe-stat-label">IBU</div>
-              ${selectedStyle?.ibu ? `<div class="recipe-stat-target">${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</div>` : ''}
-            </div>
-            <div class="recipe-stat-block">
-              <div class="recipe-stat-value stat-ebc" id="stat-ebc">${escHtml(data.ebc_estimated||'—')}</div>
-              <div class="recipe-stat-label">EBC</div>
-              ${selectedStyle?.ebc ? `<div class="recipe-stat-target">${selectedStyle.ebc[0]}–${selectedStyle.ebc[1]}</div>` : ''}
-            </div>
-          </div>
-          <input type="hidden" name="abv_estimated" id="inp-abv-estimated" value="${escHtml(data.abv_estimated||calcABV(data.og_target,data.fg_target)||'')}">
-          <input type="hidden" name="ibu_estimated" id="inp-ibu-estimated" value="${escHtml(data.ibu_estimated||'')}">
-          <div class="form-row-2">
+
+          <!-- Equipment profile selector -->
+          ${beerProfs.length > 0 ? `
             <div class="form-group">
-              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                <label class="form-label" style="margin:0">OG</label>
-                <div>${togBtn('btn-og-sg','SG',ogUnit==='sg')}${togBtn('btn-og-brix','°Bx',ogUnit==='brix')}</div>
-              </div>
-              <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisplayVal))}" step="${ogUnit==='sg'?'0.001':'0.1'}" placeholder="${ogUnit==='sg'?'1.050':'12.4'}" data-unit="${ogUnit}">
-              ${ogAlt ? `<div style="font-size:0.75em;color:var(--text-muted);margin-top:2px">${ogAlt}</div>` : ''}
+              <label class="form-label">Профиль оборудования</label>
+              <select name="equipment_profile_id" class="form-control" id="equipment-profile-select">
+                <option value="">— стандартные параметры —</option>
+                ${profOpts}
+              </select>
             </div>
-            <div class="form-group">
-              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                <label class="form-label" style="margin:0">FG</label>
-                <div>${togBtn('btn-fg-sg','SG',fgUnit==='sg')}${togBtn('btn-fg-brix','°Bx',fgUnit==='brix')}</div>
-              </div>
-              <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisplayVal))}" step="${fgUnit==='sg'?'0.001':'0.1'}" placeholder="${fgUnit==='sg'?'1.010':'2.6'}" data-unit="${fgUnit}">
-              ${fgAlt ? `<div style="font-size:0.75em;color:var(--text-muted);margin-top:2px">${fgAlt}</div>` : ''}
-            </div>
-          </div>
-          <div class="form-row-2">
-            ${formField('IBU (ручной)', `<input type="number" name="_ibu_manual" class="form-control" value="${escHtml(data.ibu_estimated||'')}" step="1" id="inp-ibu-manual">`)}
-            ${formField('EBC (ручной)', `<input type="number" name="_ebc_manual" class="form-control" value="${escHtml(data.ebc_estimated||'')}" step="1" id="inp-ebc-manual">`)}
-          </div>
-          ${formField('Описание', `<textarea name="description" class="form-control" rows="2">${escHtml(data.description||'')}</textarea>`)}
-          <div class="form-group">
-            <label class="form-label">Этикетка</label>
-            <div style="display:flex;gap:10px;align-items:center">
-              ${data.label_image
-                ? `<img src="${data.label_image}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">`
-                : `<div style="width:52px;height:52px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.2em">📷</div>`}
-              <div style="display:flex;gap:6px">
-                <input type="file" id="label-upload" accept="image/jpeg,image/png,image/webp" style="display:none">
-                <input type="hidden" name="label_image" value="${escHtml(data.label_image||'')}">
-                <button type="button" class="btn btn-secondary btn-upload-label" style="font-size:12px">Загрузить</button>
-                ${data.label_image ? `<button type="button" class="btn btn-danger btn-clear-label" style="font-size:12px">✕</button>` : ''}
-              </div>
-            </div>
-          </div>
+          ` : `<div class="text-muted" style="font-size:10px;padding:2px 0">Нет профилей оборудования — <a href="#/profiles" style="color:var(--accent)">создайте</a></div>`}
         </div>
       </div>
     </div>
@@ -805,14 +942,10 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
         <div class="form-grid">
           <div class="form-row-2">
             <div class="form-group">
-              <label class="form-label">Профиль воды
-                ${recommendedProfile && recommendedProfile !== currentProfile ? `<span class="text-muted" style="font-size:0.78em;margin-left:4px">рекоменд: ${WATER_PROFILES[recommendedProfile]?.name}</span>` : ''}
-              </label>
+              <label class="form-label">Профиль воды${recommendedProfile && recommendedProfile !== currentProfile ? `<span class="text-muted" style="font-weight:400;font-size:0.78em;margin-left:4px">рек: ${WATER_PROFILES[recommendedProfile]?.name}</span>` : ''}</label>
               <select name="water_profile" class="form-control" id="water-profile-select">
                 <option value="">— не выбран —</option>
-                ${Object.entries(WATER_PROFILES).map(([k,p]) =>
-                  `<option value="${k}" ${currentProfile===k?'selected':''}>${escHtml(p.name)}</option>`
-                ).join('')}
+                ${Object.entries(WATER_PROFILES).map(([k,p]) => `<option value="${k}" ${currentProfile===k?'selected':''}>${escHtml(p.name)}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
@@ -820,28 +953,23 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
               <input type="number" name="ph_target" class="form-control" value="${escHtml(data.ph_target||'')}" step="0.05" placeholder="5.4" min="4.5" max="6.5">
             </div>
           </div>
-
-          <div style="margin-top:4px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <label class="form-label" style="margin:0">Добавки солей (в затор)</label>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <label class="form-label" style="margin:0">Соли (в затор)</label>
               <button type="button" class="btn btn-sm btn-secondary btn-add-salt">+ Соль</button>
             </div>
             <div id="water-salts-list">
-              ${waterAdditions.length === 0 ? '<p class="text-muted" style="font-size:13px">Нет добавок</p>' :
-                waterAdditions.map((add, i) => {
-                  const salt = BREWING_SALTS.find(s => s.id === add.salt);
-                  return `<div class="water-salt-row">
-                    <select class="form-control water-salt-select" data-idx="${i}">
-                      ${BREWING_SALTS.map(s => `<option value="${s.id}" ${s.id===add.salt?'selected':''}>${s.formula} — ${escHtml(s.name)}</option>`).join('')}
-                    </select>
-                    <input type="number" class="form-control water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0">
-                    <span class="text-muted" style="font-size:11px;white-space:nowrap">г</span>
-                    <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}">✕</button>
-                  </div>`;
-                }).join('')}
+              ${waterAdditions.length === 0 ? '<p class="text-muted" style="font-size:12px">Нет добавок</p>' :
+                waterAdditions.map((add, i) => `<div class="water-salt-row">
+                  <select class="form-control water-salt-select" data-idx="${i}">
+                    ${BREWING_SALTS.map(s => `<option value="${s.id}" ${s.id===add.salt?'selected':''}>${s.formula} — ${escHtml(s.name)}</option>`).join('')}
+                  </select>
+                  <input type="number" class="form-control water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0">
+                  <span class="text-muted" style="font-size:11px;white-space:nowrap">г</span>
+                  <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}">✕</button>
+                </div>`).join('')}
             </div>
           </div>
-
           <div class="water-ions">
             <div class="water-ion"><span class="ion-label">Ca²⁺</span><span class="ion-val">${ionPpm(waterIons.ca)}</span></div>
             <div class="water-ion"><span class="ion-label">Mg²⁺</span><span class="ion-val">${ionPpm(waterIons.mg)}</span></div>
@@ -850,29 +978,38 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             <div class="water-ion"><span class="ion-label">Cl⁻</span><span class="ion-val">${ionPpm(waterIons.cl)}</span></div>
             <div class="water-ion"><span class="ion-label">HCO₃⁻</span><span class="ion-val">${ionPpm(waterIons.hco3)}</span></div>
           </div>
-          <div class="text-muted" style="font-size:0.75em;text-align:center">ppm · на основе ${waterVol} л затора</div>
+          <div class="text-muted" style="font-size:0.75em;text-align:center">ppm · ${waterVol} л затора</div>
         </div>
       </div>
     </div>
 
   </div><!-- /col 1 -->
 
-  <!-- ── Column 2: Grain Bill + Mash ────────────────────────────────────── -->
+  <!-- ── Col 2: Grain + Mash ───────────────────────────────────────────── -->
   <div class="recipe-editor-col">
 
     <div class="section-card" data-section="grain">
-      <div class="section-card-header"><h4>🌾 Засыпь</h4></div>
+      <div class="section-card-header">
+        <h4>🌾 Засыпь${totalGrainG > 0 ? `<span class="text-muted" style="font-weight:400;margin-left:6px">${(totalGrainG/1000).toFixed(2)} кг</span>` : ''}</h4>
+      </div>
       <div class="section-card-body">
         <div class="form-grid">
-          ${formField('Время кипячения (мин)', `<input type="number" name="boil_time_min" class="form-control" value="${escHtml(data.boil_time_min||'60')}" step="5">`)}
-          ${renderIngredientList(grains, 'mash', ['malt','grain_distill','sugar','other'])}
+          ${renderGrainRows(grains, totalGrainG)}
           <button type="button" class="btn btn-secondary btn-add-grain">+ Добавить солод</button>
         </div>
       </div>
     </div>
 
     <div class="section-card" data-section="mash">
-      <div class="section-card-header"><h4>🌡 Затирание</h4></div>
+      <div class="section-card-header">
+        <h4 style="display:flex;align-items:center;gap:6px;flex:1;overflow:hidden">
+          🌡 Затирание
+          <select class="form-control mash-preset-select" style="font-size:10px;height:22px;padding:0 4px;min-width:0;flex:1">
+            <option value="">— шаблон —</option>
+            ${Object.entries(MASH_PRESETS).map(([k,p]) => `<option value="${k}">${escHtml(p.label)}</option>`).join('')}
+          </select>
+        </h4>
+      </div>
       <div class="section-card-body">
         <div class="form-grid">
           <div class="form-row-3">
@@ -880,13 +1017,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             ${formField('Вода затор (л)', `<input type="number" name="water_mash_l" class="form-control" value="${escHtml(data.water_mash_l||'')}" step="0.1">`)}
             ${formField('Вода промывка (л)', `<input type="number" name="water_sparge_l" class="form-control" value="${escHtml(data.water_sparge_l||'')}" step="0.1">`)}
           </div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-            <span class="text-muted text-sm">Шаблон:</span>
-            ${Object.entries(MASH_PRESETS).map(([k,p]) =>
-              `<button type="button" class="btn btn-sm btn-secondary btn-preset" data-preset="${k}" style="font-size:11px">${escHtml(p.label)}</button>`
-            ).join('')}
-          </div>
-          <div id="mash-rests-list">${renderMashRests(mashRests)}</div>
+          <div id="mash-rests-list">${renderMashBlocks(mashRests)}</div>
           <button type="button" class="btn btn-secondary btn-add-mash-rest">+ Добавить паузу</button>
         </div>
       </div>
@@ -894,23 +1025,30 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
 
   </div><!-- /col 2 -->
 
-  <!-- ── Column 3: Boil + Fermentation + Packaging ──────────────────────── -->
+  <!-- ── Col 3: Boil + Fermentation + Packaging ────────────────────────── -->
   <div class="recipe-editor-col">
 
     <div class="section-card" data-section="boil">
       <div class="section-card-header"><h4>🔥 Кипячение & Хмель</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
-          <div class="form-row-2">
-            ${formField('Плотность до кипа (SG)', `<input type="number" name="og_preboil" class="form-control" value="${escHtml(data.og_preboil||'')}" step="0.001" min="1" max="1.2" placeholder="1.050">`)}
+          <div class="form-row-3">
+            ${formField('Кипячение (мин)', `<input type="number" name="boil_time_min" class="form-control" value="${escHtml(data.boil_time_min||'60')}" step="5">`)}
+            ${formField('OG до кипа (SG)', `<input type="number" name="og_preboil" class="form-control" value="${escHtml(data.og_preboil||'')}" step="0.001" min="1" max="1.2" placeholder="1.055">`)}
             ${formField('pH до кипа', `<input type="number" name="ph_preboil" class="form-control" value="${escHtml(data.ph_preboil||'')}" step="0.1" min="4" max="8" placeholder="5.4">`)}
           </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Хмель (кипячение)</div>
-          ${renderIngredientList(boilHops, 'boil', ['hop'])}
+          <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin:4px 0 2px">Хмель — кипячение</div>
+          ${renderHopRows(boilHops, 'boil', data.boil_time_min, og, batchVol)}
           <button type="button" class="btn btn-secondary btn-add-boil-hop">+ Добавить хмель</button>
-          <div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px">Вирпул</div>
-          ${renderIngredientList(whirlpool, 'whirlpool', ['hop','additive'])}
-          <button type="button" class="btn btn-secondary btn-add-whirlpool">+ Добавить в вирпул</button>
+          <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">
+            <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:5px">Вирпул</div>
+            <div class="form-row-2" style="margin-bottom:4px">
+              ${formField('Темп. вирпула (°C)', `<input type="number" name="whirlpool_temp_c" class="form-control" value="${escHtml(data.whirlpool_temp_c||'85')}" step="1">`)}
+              ${formField('Время вирпула (мин)', `<input type="number" name="whirlpool_time_min" class="form-control" value="${escHtml(data.whirlpool_time_min||'20')}" step="5">`)}
+            </div>
+            ${renderHopRows(whirlpool, 'whirlpool', data.whirlpool_time_min, og, batchVol, true)}
+            <button type="button" class="btn btn-secondary btn-add-whirlpool">+ Добавить в вирпул</button>
+          </div>
         </div>
       </div>
     </div>
@@ -919,31 +1057,26 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       <div class="section-card-header"><h4>🧬 Брожение</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
-          ${(() => {
-            const yeastComponents = components.filter(c => c.type === 'yeast' && c.is_active !== 'FALSE');
-            const currentYeast = fermentItems.find(i => components.find(c => c.id === i.component_id)?.type === 'yeast');
-            const currentYeastComp = currentYeast ? components.find(c => c.id === currentYeast.component_id) : null;
-            const yeastOptions = yeastComponents.map(c =>
-              `<option value="${escHtml(c.id)}" ${currentYeastComp?.id === c.id ? 'selected' : ''}>${escHtml(c.name)}${c.attenuation ? ` (${c.attenuation}%)` : ''}</option>`
-            ).join('');
-            return formField('Дрожжи', `
-              <select class="form-control" id="yeast-select">
-                <option value="">— не выбраны —</option>
-                ${yeastOptions}
-              </select>
-            `);
-          })()}
+          ${formField('Дрожжи', `
+            <select class="form-control" id="yeast-select">
+              <option value="">— не выбраны —</option>
+              ${yeastComps.map(c => `<option value="${escHtml(c.id)}" ${currentYeastComp?.id===c.id?'selected':''}>${escHtml(c.name)}${c.attenuation?` (${c.attenuation}%)`:''}</option>`).join('')}
+            </select>
+          `)}
           <div class="form-row-2">
-            ${formField('Температура (°C)', `<input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'18')}" step="0.5">`)}
-            ${formField('Дней брожения', `<input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'14')}" step="1">`)}
+            <div class="form-group">
+              <label class="form-label">Температура (°C)${currentYeastComp?.ferment_temp_min&&currentYeastComp?.ferment_temp_max?`<span class="text-muted" style="font-weight:400;margin-left:4px">${currentYeastComp.ferment_temp_min}–${currentYeastComp.ferment_temp_max}°C</span>`:''}</label>
+              <input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'18')}" step="0.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Дней брожения${currentYeastComp?.ferment_days_typical?`<span class="text-muted" style="font-weight:400;margin-left:4px">~${currentYeastComp.ferment_days_typical}</span>`:''}</label>
+              <input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'14')}" step="1">
+            </div>
           </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Добавки к брожению</div>
-          ${renderIngredientList(fermentItems.filter(i => {
-            const c = components.find(c => c.id === i.component_id);
-            return !c || c.type !== 'yeast';
-          }), 'fermentation', ['additive','salt'])}
+          <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin:2px 0">Добавки к брожению</div>
+          ${renderIngredientList(fermentItems.filter(i => { const c = components.find(c => c.id === i.component_id); return !c || c.type !== 'yeast'; }), 'fermentation', ['additive','salt'])}
           <button type="button" class="btn btn-secondary btn-add-ferment-additive">+ Добавить добавку</button>
-          <div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px">Сухое охмеление</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin:4px 0 2px">Сухое охмеление</div>
           ${renderIngredientList(dryHops, 'dry_hop', ['hop'])}
           <button type="button" class="btn btn-secondary btn-add-dry-hop">+ Сухой хмель</button>
         </div>
@@ -962,13 +1095,14 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
     </div>
 
   </div><!-- /col 3 -->
-
   </div>`; // end .recipe-editor-grid
 
-  // Wire up mobile tab bar
+  // Mobile tab bar
+  const activeTabEl = data._activeTab || 'overview';
   container.querySelectorAll('.rmt-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       const tab = btn.dataset.tab;
+      data._activeTab = tab;
       container.querySelectorAll('.rmt-tab').forEach(b => b.classList.toggle('active', b === btn));
       container.querySelector('.recipe-editor-grid')?.setAttribute('data-active-tab', tab);
     });

@@ -47,7 +47,12 @@ export function showModal(title, contentHTML, buttons = [], options = {}) {
   `;
 
   overlay.querySelector('.modal-close').addEventListener('click', closeModal);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+  // Prevent accidental close when user drags text selection outside the modal
+  let _mdOnOverlay = false;
+  overlay.addEventListener('mousedown', (e) => { _mdOnOverlay = e.target === overlay; });
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay && _mdOnOverlay && !options.fullscreen) closeModal();
+  });
 
   buttons.forEach(b => {
     if (b.onClick) {

@@ -475,3 +475,17 @@ body.theme-craft .spinner { border-color: #252527; border-top-color: #22c55e; }
 body.theme-craft .loading-state,
 body.theme-craft .empty-state,
 body.theme-craft .error-state { color: #303034; }
+
+/* ─────────────────��────────────────────���────────────────────────────────────���─
+   RECIPE CONSTRUCTOR — new elements
+   ────────────────────────────────────────────────────────────────────��──────── */
+body.theme-craft .overview-label-placeholder { background: #111114; border-color: #252527; }
+body.theme-craft .overview-label-placeholder:hover { border-color: #22c55e; }
+body.theme-craft .style-ranges-bar { background: #111114; border-left-color: #22c55e; }
+body.theme-craft .style-ranges-bar span { color: #505058; }
+body.theme-craft .hop-row-boil     { background: rgba(34, 197, 94,  0.06); }
+body.theme-craft .hop-row-whirlpool{ background: rgba(20, 184, 166, 0.08); }
+body.theme-craft .mash-block { background: #111114; border-color: #1E1E20; }
+body.theme-craft .mash-block[data-type="rest"]      { border-left-color: rgba(217,119,6,0.7); }
+body.theme-craft .mash-block[data-type="decoction"] { border-left-color: rgba(239,68,68,0.7); }
+

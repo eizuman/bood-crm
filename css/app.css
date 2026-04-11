@@ -1026,7 +1026,114 @@ body.modal-open { overflow: hidden; }
   .print-header h2 { color: #8B5E0A; }
 }
 
-/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+/* ── Recipe Overview top layout ────────────────────────────────────────────── */
+.overview-top {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.overview-label-wrap {
+  flex-shrink: 0;
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.overview-label-img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: block;
+}
+.overview-label-placeholder {
+  width: 64px;
+  height: 64px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4em;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.overview-label-placeholder:hover { border-color: var(--accent-amber); }
+.overview-name-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.overview-name-input {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  height: 32px !important;
+}
+
+/* Style ranges bar */
+.style-ranges-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: 11px;
+  border-left: 2px solid var(--accent-amber);
+}
+.style-ranges-bar span { color: var(--text-secondary); }
+
+/* Stats row */
+.overview-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+/* Hop rows colouring */
+.hop-row-boil {
+  background: rgba(34, 197, 94, 0.05);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.hop-row-whirlpool {
+  background: rgba(20, 184, 166, 0.07);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+/* Mash blocks */
+.mash-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+.mash-block[data-type="rest"]      { border-left: 3px solid rgba(251, 191, 36, 0.7); }
+.mash-block[data-type="decoction"] { border-left: 3px solid rgba(239, 68, 68, 0.7); }
+.mash-block-header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.mash-block-header .form-control { flex: 1; }
+.mash-block-params {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.mash-block-param {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Scrollbar ─────────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
 ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }

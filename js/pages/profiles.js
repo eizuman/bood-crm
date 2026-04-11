@@ -3,6 +3,7 @@ import { getRows, appendRow, updateRow, softDelete, genId, now } from '../sheets
 import { showModal, closeModal, showConfirm, showToast, showLoading, showError, pageHeader, formField } from '../ui.js';
 import t from '../i18n.js';
 import { SHEET_NAMES } from '../config.js';
+import { ensureDefaultProfile } from '../catalog.js';
 
 const SHEET = SHEET_NAMES.BREWING_PROFILES;
 
@@ -255,6 +256,8 @@ function spiritTable(profiles, onAction) {
 
 export async function renderProfiles(container) {
   container.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+
+  await ensureDefaultProfile();
 
   let allProfiles;
   try {

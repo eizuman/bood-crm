@@ -1,5 +1,5 @@
 // Bood CRM — Standard ingredients catalog
-import { getRows, appendRows, genId, now } from './sheets.js';
+import { getRows, appendRows, appendRow, genId, now } from './sheets.js';
 
 export const SUPPORTED_COUNTRIES = [
   { code: 'RU', label: 'Россия (РФ)' },
@@ -66,18 +66,18 @@ const CATALOG = {
     { name: 'Willamette', type: 'hop', unit: 'г', cost_per_unit: '4.00', alpha_acid: '5.0', notes: 'Земля, трава, цветочный' },
 
     // ── Дрожжи ────────────────────────────────────────────────────────────
-    { name: 'Fermentis US-05', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '81', notes: 'Американский эль, чистый. 18-28°C' },
-    { name: 'Fermentis S-04', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '75', notes: 'Английский эль, фруктовый. 15-24°C' },
-    { name: 'Fermentis W-34/70', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '82', notes: 'Классический лагер. 9-15°C' },
-    { name: 'Fermentis BE-256 (Abbaye)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '81', notes: 'Бельгийский эль, фруктовый. 15-30°C' },
-    { name: 'Fermentis K-97', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '81', notes: 'Немецкий вайцен, банановый. 15-24°C' },
-    { name: 'Fermentis S-23', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '82', notes: 'Западноевропейский лагер. 9-15°C' },
-    { name: 'Lallemand Nottingham', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '80', notes: 'Английский эль, нейтральный. 14-21°C' },
-    { name: 'Lallemand BRY-97', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '81', notes: 'Западный американский эль. 17-23°C' },
-    { name: 'Mangrove Jack\'s M44', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '80', notes: 'US West Coast IPA. 18-28°C' },
-    { name: 'Mangrove Jack\'s M47 (Belgian Abbey)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '72', notes: 'Бельгийский аббатский. 18-28°C' },
-    { name: 'Mangrove Jack\'s M42 (New World)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '80', notes: 'Универсальный эль, чистый. 16-22°C' },
-    { name: 'Mangrove Jack\'s M29 (French Saison)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '83', notes: 'Сезон, пряный, сухой. 20-30°C' },
+    { name: 'Fermentis US-05', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '81', notes: 'Американский эль, чистый. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
+    { name: 'Fermentis S-04', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '75', notes: 'Английский эль, фруктовый. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
+    { name: 'Fermentis W-34/70', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '82', notes: 'Классический лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
+    { name: 'Fermentis BE-256 (Abbaye)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '81', notes: 'Бельгийский эль, фруктовый. 15-30°C', ferment_temp_min: '15', ferment_temp_max: '30', ferment_days_typical: '10' },
+    { name: 'Fermentis K-97', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '81', notes: 'Немецкий вайцен, банановый. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
+    { name: 'Fermentis S-23', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '82', notes: 'Западноевропейский лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
+    { name: 'Lallemand Nottingham', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '80', notes: 'Английский эль, нейтральный. 14-21°C', ferment_temp_min: '14', ferment_temp_max: '21', ferment_days_typical: '14' },
+    { name: 'Lallemand BRY-97', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '81', notes: 'Западный американский эль. 17-23°C', ferment_temp_min: '17', ferment_temp_max: '23', ferment_days_typical: '14' },
+    { name: 'Mangrove Jack\'s M44', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '80', notes: 'US West Coast IPA. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
+    { name: 'Mangrove Jack\'s M47 (Belgian Abbey)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '72', notes: 'Бельгийский аббатский. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
+    { name: 'Mangrove Jack\'s M42 (New World)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '80', notes: 'Универсальный эль, чистый. 16-22°C', ferment_temp_min: '16', ferment_temp_max: '22', ferment_days_typical: '14' },
+    { name: 'Mangrove Jack\'s M29 (French Saison)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '83', notes: 'Сезон, пряный, сухой. 20-30°C', ferment_temp_min: '20', ferment_temp_max: '30', ferment_days_typical: '7' },
 
     // ── Соли и кислоты ────────────────────────────────────────────────────
     { name: 'Сульфат кальция (Гипс, CaSO₄)', type: 'salt', unit: 'г', cost_per_unit: '0.50', notes: 'Повышает жёсткость, подчёркивает горечь' },
@@ -114,6 +114,25 @@ const CATALOG = {
   ],
 };
 
+// ─── Ensure at least one default beer profile exists ─────────────────────────
+export async function ensureDefaultProfile() {
+  try {
+    const profiles = await getRows('BrewingProfiles');
+    const beer = profiles.filter(p => p.type === 'beer' && p.is_active !== 'FALSE');
+    if (beer.length > 0) return beer[0];
+    const ts = now();
+    const def = {
+      id: genId(), name: 'Стандартная система', type: 'beer',
+      system_efficiency: '72', grain_absorption: '1.0', boiloff_rate_pct: '10',
+      wort_shrinkage_pct: '4', kettle_loss_l: '1.5', fermenter_loss_l: '1.0',
+      kettle_volume_l: '30', notes: 'Автоматически созданный профиль',
+      is_active: 'TRUE', created_at: ts, updated_at: ts,
+    };
+    await appendRow('BrewingProfiles', def);
+    return def;
+  } catch { return null; }
+}
+
 export function getCatalogCount(country = 'RU') {
   return (CATALOG[country] || []).length;
 }
@@ -144,6 +163,10 @@ export async function loadCatalog(country = 'RU') {
     is_active: 'TRUE',
     created_at: ts,
     updated_at: ts,
+    brand: '',
+    ferment_temp_min: c.ferment_temp_min || '',
+    ferment_temp_max: c.ferment_temp_max || '',
+    ferment_days_typical: c.ferment_days_typical || '',
   }));
 
   // Append in batches of 50 to stay within Sheets API limits
