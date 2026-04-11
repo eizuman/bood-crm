@@ -4,6 +4,10 @@
    Inter 400–900 · ultra-compact but readable
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOOD CRM — Craft Theme  v5 (section colors + row backgrounds)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 /* ── Variables ─────────────────────────────────────────────────────────────── */
 body.theme-craft {
   --bg-primary:   #0C0C0E;
@@ -298,8 +302,80 @@ body.theme-craft .recipe-editor-col  { gap: 8px; }
 
 /* Tighten cards inside grid more */
 body.theme-craft .recipe-editor-grid .section-card-header { padding: 7px 12px; }
-body.theme-craft .recipe-editor-grid .section-card-header h4 { font-size: 10px; letter-spacing: 1.1px; }
+body.theme-craft .recipe-editor-grid .section-card-header h4 {
+  font-size: 11px; font-weight: 900; letter-spacing: 0.8px;
+}
 body.theme-craft .recipe-editor-grid .section-card-body  { padding: 8px 12px; }
+
+/* ── Per-section header accent colors ───────────────────────────────────────── */
+/* Grain — warm amber */
+body.theme-craft .recipe-editor-grid .section-card[data-section="grain"] .section-card-header {
+  background: #1A1208 !important;
+  border-bottom-color: #3D2800 !important;
+}
+body.theme-craft .recipe-editor-grid .section-card[data-section="grain"] .section-card-header h4 {
+  color: #d97706;
+}
+/* Mash — earthy brown */
+body.theme-craft .recipe-editor-grid .section-card[data-section="mash"] .section-card-header {
+  background: #130F08 !important;
+  border-bottom-color: #2E2008 !important;
+}
+body.theme-craft .recipe-editor-grid .section-card[data-section="mash"] .section-card-header h4 {
+  color: #b45309;
+}
+/* Boil / Hops — deep orange */
+body.theme-craft .recipe-editor-grid .section-card[data-section="boil"] .section-card-header {
+  background: #160A03 !important;
+  border-bottom-color: #3A1400 !important;
+}
+body.theme-craft .recipe-editor-grid .section-card[data-section="boil"] .section-card-header h4 {
+  color: #f97316;
+}
+/* Fermentation — green */
+body.theme-craft .recipe-editor-grid .section-card[data-section="fermentation"] .section-card-header {
+  background: #061210 !important;
+  border-bottom-color: #0D2E26 !important;
+}
+body.theme-craft .recipe-editor-grid .section-card[data-section="fermentation"] .section-card-header h4 {
+  color: #22c55e;
+}
+/* Packaging — slate blue */
+body.theme-craft .recipe-editor-grid .section-card[data-section="packaging"] .section-card-header {
+  background: #070A14 !important;
+  border-bottom-color: #111830 !important;
+}
+body.theme-craft .recipe-editor-grid .section-card[data-section="packaging"] .section-card-header h4 {
+  color: #60a5fa;
+}
+
+/* ── Mash rest row colors by type ────────────────────────────────────────────── */
+body.theme-craft .mash-rest-row {
+  border-radius: 4px; padding: 3px 5px; margin-bottom: 3px;
+}
+body.theme-craft .mash-rest-row[data-type="rest"] {
+  background: rgba(180, 83, 9, 0.12);
+  border: 1px solid rgba(180, 83, 9, 0.25);
+}
+body.theme-craft .mash-rest-row[data-type="step"] {
+  background: rgba(217, 119, 6, 0.10);
+  border: 1px solid rgba(217, 119, 6, 0.22);
+}
+body.theme-craft .mash-rest-row[data-type="decoction"] {
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+}
+
+/* ── Ingredient row colors by stage ─────────────────────────────────────────── */
+body.theme-craft .recipe-editor-grid [data-section="boil"]  .ingredient-row,
+body.theme-craft .recipe-editor-grid [data-section="grain"] .ingredient-row {
+  background: rgba(249, 115, 22, 0.06);
+  border-radius: 3px; padding: 2px 3px; margin-bottom: 2px;
+}
+body.theme-craft .recipe-editor-grid [data-section="fermentation"] .ingredient-row {
+  background: rgba(34, 197, 94, 0.06);
+  border-radius: 3px; padding: 2px 3px; margin-bottom: 2px;
+}
 
 body.theme-craft .recipe-editor-grid .form-grid  { gap: 5px; }
 body.theme-craft .recipe-editor-grid .form-field { gap: 2px; }

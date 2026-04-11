@@ -229,14 +229,54 @@ function showRecipeEditor(recipe, pageContainer) {
     tabContent.querySelector('.btn-add-whirlpool')?.addEventListener('click', () => {
       addIngredient('whirlpool', recipeIngredients, renderView);
     });
+    // Yeast picker — replaces previous yeast entry, auto-fills temp/days if possible
+    tabContent.querySelector('#yeast-select')?.addEventListener('change', (e) => {
+      const yeastId = e.target.value;
+      // Remove existing yeast from fermentation stage
+      const toRemove = recipeIngredients.filter(i =>
+        i.stage_key === 'fermentation' && components.find(c => c.id === i.component_id)?.type === 'yeast'
+      );
+      toRemove.forEach(r => {
+        const idx = recipeIngredients.indexOf(r);
+        if (idx !== -1) recipeIngredients.splice(idx, 1);
+      });
+      if (yeastId) {
+        recipeIngredients.push({
+          id: genId(),
+          component_id: yeastId,
+          qty: '',
+          stage_key: 'fermentation',
+          time_meta: '',
+          sort_order: String(recipeIngredients.filter(i => i.stage_key === 'fermentation').length),
+          created_at: now(),
+        });
+        // Auto-fill temp/days from notes if parseable (e.g. "18-20°C, 14 дней")
+        const yeastComp = components.find(c => c.id === yeastId);
+        if (yeastComp?.notes) {
+          const tempMatch = yeastComp.notes.match(/(\d+)[-–]?(\d*)[\s°]*[Cc°]/);
+          const daysMatch = yeastComp.notes.match(/(\d+)\s*д(ней|ня|ень)/i);
+          if (tempMatch && !recipeData.ferment_temp_c) {
+            recipeData.ferment_temp_c = tempMatch[1];
+            isDirty = true;
+          }
+          if (daysMatch && !recipeData.ferment_days) {
+            recipeData.ferment_days = daysMatch[1];
+            isDirty = true;
+          }
+        }
+      }
+      isDirty = true;
+      renderView();
+    });
+    // Fallback for spirit tab fermentation (uses old combined button)
     tabContent.querySelector('.btn-add-yeast')?.addEventListener('click', () => {
-      addIngredient('fermentation', recipeIngredients, renderView, 'yeast');
+      addIngredient('fermentation', recipeIngredients, renderView);
+    });
+    tabContent.querySelector('.btn-add-ferment-additive')?.addEventListener('click', () => {
+      addIngredientFiltered('fermentation', recipeIngredients, renderView, ['additive','salt']);
     });
     tabContent.querySelector('.btn-add-dry-hop')?.addEventListener('click', () => {
       addIngredient('dry_hop', recipeIngredients, renderView);
-    });
-    tabContent.querySelector('.btn-add-additive')?.addEventListener('click', () => {
-      addIngredient('fermentation', recipeIngredients, renderView, 'additive');
     });
     tabContent.querySelector('.btn-add-packaging')?.addEventListener('click', () => {
       addIngredient('packaging', recipeIngredients, renderView);
@@ -257,12 +297,8 @@ function showRecipeEditor(recipe, pageContainer) {
     // Remove ingredient buttons
     tabContent.querySelectorAll('.btn-remove-ingredient').forEach(btn => {
       btn.addEventListener('click', () => {
-        const idx = parseInt(btn.dataset.idx);
-        const stageKey = btn.dataset.stage;
-        // Find and remove
-        const stageIngredients = recipeIngredients.filter(i => i.stage_key === stageKey);
-        const toRemove = stageIngredients[idx];
-        if (toRemove) recipeIngredients = recipeIngredients.filter(i => i !== toRemove);
+        const ingId = btn.dataset.id;
+        recipeIngredients = recipeIngredients.filter(i => i.id !== ingId);
         renderView();
       });
     });
@@ -279,13 +315,12 @@ function showRecipeEditor(recipe, pageContainer) {
     // Update component selection + unit label
     tabContent.querySelectorAll('.ingredient-comp').forEach(sel => {
       sel.addEventListener('change', () => {
-        const idx = parseInt(sel.dataset.idx);
-        const stage = sel.dataset.stage;
+        const ingId = sel.dataset.id;
         const comp = components.find(c => c.id === sel.value);
         const unitLabel = sel.closest('.ingredient-row')?.querySelector('.ingredient-unit');
         if (unitLabel) unitLabel.textContent = comp?.unit || '';
-        const stageIngredients = recipeIngredients.filter(i => i.stage_key === stage);
-        if (stageIngredients[idx]) stageIngredients[idx].component_id = sel.value;
+        const ing = recipeIngredients.find(i => i.id === ingId);
+        if (ing) ing.component_id = sel.value;
         isDirty = true;
       });
     });
@@ -293,25 +328,32 @@ function showRecipeEditor(recipe, pageContainer) {
     // Update ingredient qty/meta inline
     tabContent.querySelectorAll('.ingredient-qty').forEach(input => {
       input.addEventListener('change', () => {
-        const idx = parseInt(input.dataset.idx);
-        const stage = input.dataset.stage;
-        const stageIngredients = recipeIngredients.filter(i => i.stage_key === stage);
-        if (stageIngredients[idx]) stageIngredients[idx].qty = input.value;
+        const ingId = input.dataset.id;
+        const ing = recipeIngredients.find(i => i.id === ingId);
+        if (ing) ing.qty = input.value;
+        isDirty = true;
       });
     });
     tabContent.querySelectorAll('.ingredient-time').forEach(input => {
       input.addEventListener('change', () => {
-        const idx = parseInt(input.dataset.idx);
-        const stage = input.dataset.stage;
-        const stageIngredients = recipeIngredients.filter(i => i.stage_key === stage);
-        if (stageIngredients[idx]) stageIngredients[idx].time_meta = input.value;
+        const ingId = input.dataset.id;
+        const ing = recipeIngredients.find(i => i.id === ingId);
+        if (ing) ing.time_meta = input.value;
+        isDirty = true;
       });
     });
     tabContent.querySelectorAll('.mash-rest-field').forEach(input => {
       input.addEventListener('change', () => {
         const idx = parseInt(input.dataset.idx);
         const field = input.dataset.field;
-        if (recipeMashRests[idx]) recipeMashRests[idx][field] = input.value;
+        if (recipeMashRests[idx]) {
+          recipeMashRests[idx][field] = input.value;
+          isDirty = true;
+          // Update data-type on the row for live CSS coloring
+          if (field === 'rest_type') {
+            input.closest('.mash-rest-row')?.setAttribute('data-type', input.value);
+          }
+        }
       });
     });
 
@@ -409,15 +451,9 @@ function showRecipeEditor(recipe, pageContainer) {
     tabContent.querySelectorAll('.btn-preset').forEach(btn => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.preset;
-        if (recipeMashRests.length > 0) {
-          showConfirm('Заменить текущие паузы шаблоном?', '', () => {
-            loadMashPreset(key, recipeMashRests);
-            renderView();
-          });
-        } else {
-          loadMashPreset(key, recipeMashRests);
-          renderView();
-        }
+        if (recipeMashRests.length > 0 && !confirm('Заменить текущие паузы шаблоном?')) return;
+        loadMashPreset(key, recipeMashRests);
+        renderView();
       });
     });
 
@@ -799,7 +835,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   <!-- ── Column 2: Grain Bill + Mash ────────────────────────────────────── -->
   <div class="recipe-editor-col">
 
-    <div class="section-card">
+    <div class="section-card" data-section="grain">
       <div class="section-card-header"><h4>🌾 Засыпь</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
@@ -810,7 +846,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       </div>
     </div>
 
-    <div class="section-card">
+    <div class="section-card" data-section="mash">
       <div class="section-card-header"><h4>🌡 Затирание</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
@@ -836,10 +872,14 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   <!-- ── Column 3: Boil + Fermentation + Packaging ──────────────────────── -->
   <div class="recipe-editor-col">
 
-    <div class="section-card">
+    <div class="section-card" data-section="boil">
       <div class="section-card-header"><h4>🔥 Кипячение & Хмель</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
+          <div class="form-row-2">
+            ${formField('Плотность до кипа (SG)', `<input type="number" name="og_preboil" class="form-control" value="${escHtml(data.og_preboil||'')}" step="0.001" min="1" max="1.2" placeholder="1.050">`)}
+            ${formField('pH до кипа', `<input type="number" name="ph_preboil" class="form-control" value="${escHtml(data.ph_preboil||'')}" step="0.1" min="4" max="8" placeholder="5.4">`)}
+          </div>
           <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Хмель (кипячение)</div>
           ${renderIngredientList(boilHops, 'boil', ['hop'])}
           <button type="button" class="btn btn-secondary btn-add-boil-hop">+ Добавить хмель</button>
@@ -850,17 +890,34 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       </div>
     </div>
 
-    <div class="section-card">
+    <div class="section-card" data-section="fermentation">
       <div class="section-card-header"><h4>🧬 Брожение</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
+          ${(() => {
+            const yeastComponents = components.filter(c => c.type === 'yeast' && c.is_active !== 'FALSE');
+            const currentYeast = fermentItems.find(i => components.find(c => c.id === i.component_id)?.type === 'yeast');
+            const currentYeastComp = currentYeast ? components.find(c => c.id === currentYeast.component_id) : null;
+            const yeastOptions = yeastComponents.map(c =>
+              `<option value="${escHtml(c.id)}" ${currentYeastComp?.id === c.id ? 'selected' : ''}>${escHtml(c.name)}${c.attenuation ? ` (${c.attenuation}%)` : ''}</option>`
+            ).join('');
+            return formField('Дрожжи', `
+              <select class="form-control" id="yeast-select">
+                <option value="">— не выбраны —</option>
+                ${yeastOptions}
+              </select>
+            `);
+          })()}
           <div class="form-row-2">
             ${formField('Температура (°C)', `<input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'18')}" step="0.5">`)}
             ${formField('Дней брожения', `<input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'14')}" step="1">`)}
           </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Дрожжи и добавки</div>
-          ${renderIngredientList(fermentItems, 'fermentation', ['yeast','additive','salt'])}
-          <button type="button" class="btn btn-secondary btn-add-yeast">+ Дрожжи/Добавка</button>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Добавки к брожению</div>
+          ${renderIngredientList(fermentItems.filter(i => {
+            const c = components.find(c => c.id === i.component_id);
+            return !c || c.type !== 'yeast';
+          }), 'fermentation', ['additive','salt'])}
+          <button type="button" class="btn btn-secondary btn-add-ferment-additive">+ Добавить добавку</button>
           <div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px">Сухое охмеление</div>
           ${renderIngredientList(dryHops, 'dry_hop', ['hop'])}
           <button type="button" class="btn btn-secondary btn-add-dry-hop">+ Сухой хмель</button>
@@ -868,7 +925,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       </div>
     </div>
 
-    <div class="section-card">
+    <div class="section-card" data-section="packaging">
       <div class="section-card-header"><h4>📦 Упаковка</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
@@ -1142,11 +1199,11 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
 function renderMashRests(rests) {
   if (!rests.length) return '<p class="text-muted">Нет пауз</p>';
   return rests.map((r, i) => `
-    <div class="mash-rest-row">
+    <div class="mash-rest-row" data-type="${escHtml(r.rest_type||'rest')}">
       <input type="text" class="form-control mash-rest-field" data-idx="${i}" data-field="name" value="${escHtml(r.name||'Осахаривание')}" placeholder="Название">
-      <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="temp_c" value="${escHtml(r.temp_c||'65')}" placeholder="°C" style="width:80px">
-      <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="duration_min" value="${escHtml(r.duration_min||'60')}" placeholder="мин" style="width:80px">
-      <select class="form-control mash-rest-field" data-idx="${i}" data-field="rest_type" style="width:120px">
+      <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="temp_c" value="${escHtml(r.temp_c||'65')}" placeholder="°C" style="width:70px">
+      <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="duration_min" value="${escHtml(r.duration_min||'60')}" placeholder="мин" style="width:65px">
+      <select class="form-control mash-rest-field" data-idx="${i}" data-field="rest_type" style="width:110px">
         <option value="rest" ${r.rest_type==='rest'?'selected':''}>rest</option>
         <option value="step" ${r.rest_type==='step'?'selected':''}>step</option>
         <option value="decoction" ${r.rest_type==='decoction'?'selected':''}>decoction</option>
@@ -1167,14 +1224,14 @@ function renderIngredientList(items, stageKey, allowedTypes = []) {
     const unit = comp?.unit || '';
     return `
       <div class="ingredient-row">
-        <select class="form-control ingredient-comp" data-idx="${i}" data-stage="${stageKey}" style="flex:2">
+        <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" style="flex:2">
           ${filteredComponents.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
         </select>
-        <input type="number" class="form-control ingredient-qty" data-idx="${i}" data-stage="${stageKey}"
+        <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"
           value="${escHtml(ing.qty||'')}" placeholder="Кол-во" step="any" style="width:90px">
         <span class="ingredient-unit text-muted" style="min-width:28px;font-size:0.85em">${escHtml(unit)}</span>
-        ${stageKey === 'boil' || stageKey === 'dry_hop' ? `<input type="number" class="form-control ingredient-time" data-idx="${i}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="${stageKey==='boil'?'мин':'день'}" style="width:80px">` : ''}
-        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-idx="${i}" data-stage="${stageKey}">✕</button>
+        ${stageKey === 'boil' || stageKey === 'dry_hop' ? `<input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="${stageKey==='boil'?'мин':'день'}" style="width:80px">` : ''}
+        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
       </div>
     `;
   }).join('');
@@ -1303,6 +1360,21 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
 function addIngredient(stageKey, ingredientsArr, refresh) {
   const filtered = components.filter(c => c.is_active !== 'FALSE');
   if (!filtered.length) { showToast('Нет компонентов. Добавьте компоненты сначала.', 'warning'); return; }
+  ingredientsArr.push({
+    id: genId(),
+    component_id: filtered[0].id,
+    qty: '',
+    stage_key: stageKey,
+    time_meta: '',
+    sort_order: String(ingredientsArr.length),
+    created_at: now(),
+  });
+  refresh();
+}
+
+function addIngredientFiltered(stageKey, ingredientsArr, refresh, allowedTypes) {
+  const filtered = components.filter(c => c.is_active !== 'FALSE' && allowedTypes.includes(c.type));
+  if (!filtered.length) { showToast('Нет подходящих компонентов. Добавьте их в Компоненты.', 'warning'); return; }
   ingredientsArr.push({
     id: genId(),
     component_id: filtered[0].id,
