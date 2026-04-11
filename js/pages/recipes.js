@@ -117,8 +117,9 @@ function showRecipeEditor(recipe, pageContainer) {
   const isNew = !recipe;
   let activeTab = 'overview';
   let recipeData = recipe ? { ...recipe } : { type: recipeType, is_active: 'TRUE' };
-  let recipeIngredients = recipe ? ingredients.filter(i => i.recipe_id === recipe.id) : [];
-  let recipeMashRests = recipe ? mashRests.filter(r => r.recipe_id === recipe.id) : [];
+  // Deep-copy so mutations inside the editor don't affect the global arrays
+  let recipeIngredients = recipe ? ingredients.filter(i => i.recipe_id === recipe.id).map(i => ({ ...i })) : [];
+  let recipeMashRests   = recipe ? mashRests.filter(r => r.recipe_id === recipe.id).map(r => ({ ...r })) : [];
   // Track IDs that were already in the sheet when we opened this editor
   const savedIngredientIds = new Set(recipeIngredients.map(i => i.id));
   const savedRestIds       = new Set(recipeMashRests.map(r => r.id));
@@ -299,24 +300,20 @@ function showRecipeEditor(recipe, pageContainer) {
       addIngredient('aging', recipeIngredients, renderView);
     });
 
-    // Remove ingredient buttons — also delete from sheet if already saved
+    // Remove ingredient — deferred: actual sheet deletion happens on Save
     tabContent.querySelectorAll('.btn-remove-ingredient').forEach(btn => {
       btn.addEventListener('click', () => {
-        const ingId = btn.dataset.id;
-        const ing   = recipeIngredients.find(i => i.id === ingId);
-        recipeIngredients = recipeIngredients.filter(i => i.id !== ingId);
-        if (ing?.recipe_id) deleteRow('RecipeIngredients', ingId).catch(() => {});
+        recipeIngredients = recipeIngredients.filter(i => i.id !== btn.dataset.id);
+        isDirty = true;
         renderView();
       });
     });
 
-    // Remove mash rest — also delete from sheet if already saved
+    // Remove mash rest — deferred: actual sheet deletion happens on Save
     tabContent.querySelectorAll('.btn-remove-rest').forEach(btn => {
       btn.addEventListener('click', () => {
-        const idx  = parseInt(btn.dataset.idx);
-        const rest = recipeMashRests[idx];
-        recipeMashRests.splice(idx, 1);
-        if (rest?.recipe_id) deleteRow('RecipeMashRests', rest.id).catch(() => {});
+        recipeMashRests.splice(parseInt(btn.dataset.idx), 1);
+        isDirty = true;
         renderView();
       });
     });
