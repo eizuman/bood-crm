@@ -1133,6 +1133,40 @@ body.modal-open { overflow: hidden; }
   gap: 3px;
 }
 
+/* Water chain row ───────────────────────────────────────────────────────────── */
+.water-chain-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.water-chain-cell {
+  flex: 1 1 80px;
+  min-width: 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wc-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+.wc-input { font-size: 12px; padding: 4px 6px; height: 28px; }
+.wc-input.wc-mismatch {
+  border-color: var(--warning) !important;
+  background: rgba(255,152,0,0.08) !important;
+}
+.wc-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
 /* Scrollbar ─────────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }

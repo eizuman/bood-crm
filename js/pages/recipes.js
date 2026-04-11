@@ -216,10 +216,10 @@ function showRecipeEditor(recipe, pageContainer) {
       addIngredient('mash', recipeIngredients, renderView);
     });
     tabContent.querySelector('.btn-add-boil-hop')?.addEventListener('click', () => {
-      addIngredient('boil', recipeIngredients, renderView);
+      addIngredientFiltered('boil', recipeIngredients, renderView, ['hop']);
     });
     tabContent.querySelector('.btn-add-whirlpool')?.addEventListener('click', () => {
-      addIngredient('whirlpool', recipeIngredients, renderView);
+      addIngredientFiltered('whirlpool', recipeIngredients, renderView, ['hop', 'additive']);
     });
     // Yeast picker — replaces previous yeast entry, auto-fills temp/days if possible
     tabContent.querySelector('#yeast-select')?.addEventListener('change', (e) => {
@@ -804,6 +804,36 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   const beerProfs  = equipmentProfiles.filter(p => p.type === 'beer' && p.is_active !== 'FALSE');
   const profOpts   = beerProfs.map(p => `<option value="${escHtml(p.id)}" ${data.equipment_profile_id===p.id?'selected':''}>${escHtml(p.name)}</option>`).join('');
 
+  // Water chain validation
+  const selProf    = beerProfs.find(p => p.id === data.equipment_profile_id);
+  const wcp = {
+    grain_absorption:  parseFloat(selProf?.grain_absorption  || settings.grain_absorption  || 1.0),
+    boiloff_rate_pct:  parseFloat(selProf?.boiloff_rate_pct  || settings.boiloff_rate_pct  || 10),
+    wort_shrinkage_pct:parseFloat(selProf?.wort_shrinkage_pct|| settings.wort_shrinkage_pct|| 4),
+  };
+  const wcGrainKg    = totalGrainG / 1000;
+  const wcHM         = parseFloat(data.hydromodule) || 3;
+  const wcMash       = parseFloat(data.water_mash_l) || 0;
+  const wcSparge     = parseFloat(data.water_sparge_l) || 0;
+  const wcPreboil    = parseFloat(data.water_total_l) || 0;   // repurposed field
+  const wcBoilMins   = parseFloat(data.boil_time_min) || 60;
+  const wcBrewLoss   = parseFloat(data.brew_loss_pct) || parseFloat(settings.brew_loss_pct) || 10;
+  const wcFermLoss   = parseFloat(data.fermenter_loss_pct) || parseFloat(settings.fermenter_loss_pct) || 5;
+  const wcPackaged   = parseFloat(data.packaged_l) || 0;
+  // Expected values
+  const wcExpMash    = wcGrainKg > 0 ? +(wcGrainKg * wcHM).toFixed(2) : 0;
+  const wcExpPreboil = (wcMash + wcSparge - wcGrainKg * wcp.grain_absorption);
+  const wcExpAfterBoil = wcPreboil > 0
+    ? +(wcPreboil * (1 - wcp.boiloff_rate_pct / 100 * (wcBoilMins / 60)) * (1 - wcp.wort_shrinkage_pct / 100)).toFixed(2)
+    : 0;
+  // Mismatch flags (tolerance 0.4 L)
+  const WC_TOL = 0.4;
+  const wcMashMm    = wcMash > 0 && wcExpMash > 0 && Math.abs(wcMash - wcExpMash) > WC_TOL;
+  const wcSpargeMm  = false; // no independent formula for sparge — no highlight
+  const wcPreboilMm = wcPreboil > 0 && wcExpPreboil > 0 && Math.abs(wcPreboil - wcExpPreboil) > WC_TOL;
+  const wcAfterMm   = false; // after-boil is output, not independently set
+  function wcHint(expected, unit='л') { return expected > 0 ? `<span class="wc-hint">≈ ${expected.toFixed(1)} ${unit}</span>` : ''; }
+
   // Current yeast
   const currentYeast     = fermentItems.find(i => components.find(c => c.id === i.component_id)?.type === 'yeast');
   const currentYeastComp = currentYeast ? components.find(c => c.id === currentYeast.component_id) : null;
@@ -850,16 +880,6 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             </div>
           </div>
 
-          <!-- Style ranges -->
-          ${selectedStyle ? `<div class="style-ranges-bar">
-            <span class="text-muted" style="font-size:10px">${escHtml(selectedStyle.code)}</span>
-            ${selectedStyle.og  ?`<span>OG ${selectedStyle.og[0]}–${selectedStyle.og[1]}</span>`:''}
-            ${selectedStyle.fg  ?`<span>FG ${selectedStyle.fg[0]}–${selectedStyle.fg[1]}</span>`:''}
-            ${selectedStyle.ibu ?`<span>IBU ${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</span>`:''}
-            ${selectedStyle.ebc ?`<span>EBC ${selectedStyle.ebc[0]}–${selectedStyle.ebc[1]}</span>`:''}
-            ${selectedStyle.abv ?`<span>ABV ${selectedStyle.abv[0]}–${selectedStyle.abv[1]}%</span>`:''}
-          </div>` : ''}
-
           <!-- Stats -->
           <div class="overview-stats-row">
             <div class="recipe-stat-block">
@@ -879,12 +899,12 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <input type="hidden" name="ibu_estimated" value="${escHtml(data.ibu_estimated||'')}">
           <input type="hidden" name="ebc_estimated" value="${escHtml(data.ebc_estimated||'')}">
 
-          <!-- OG/FG shared unit toggle -->
+          <!-- OG / FG / Упаковка -->
           <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-bottom:3px">
             <span style="font-size:10px;color:var(--text-muted)">OG/FG:</span>
             ${togBtn('btn-unit-sg','SG',unit==='sg')}${togBtn('btn-unit-brix','°Bx',unit==='brix')}
           </div>
-          <div class="form-row-2">
+          <div class="form-row-3">
             <div class="form-group">
               <label class="form-label">OG ${unit==='brix'&&ogSgVal?`<span class="text-muted" style="font-weight:400">≈ SG ${ogSgVal}</span>`:''}</label>
               <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
@@ -893,33 +913,13 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
               <label class="form-label">FG ${unit==='brix'&&fgSgVal?`<span class="text-muted" style="font-weight:400">≈ SG ${fgSgVal}</span>`:''}</label>
               <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
             </div>
-          </div>
-
-          <!-- Volumes: packaged_l anchor -->
-          <div class="form-row-3">
             <div class="form-group">
               <label class="form-label">Упаковка (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
               <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
             </div>
-            <div class="form-group">
-              <label class="form-label">% потерь варки</label>
-              <input type="number" name="brew_loss_pct" class="form-control" id="vol-brew-loss" value="${escHtml(data.brew_loss_pct||'')}" step="0.5" placeholder="${escHtml(settings.brew_loss_pct||'10')}">
-            </div>
-            <div class="form-group">
-              <label class="form-label">% потерь ферм.</label>
-              <input type="number" name="fermenter_loss_pct" class="form-control" id="vol-ferm-loss" value="${escHtml(data.fermenter_loss_pct||'')}" step="0.5" placeholder="${escHtml(settings.fermenter_loss_pct||'5')}">
-            </div>
           </div>
-          <div class="form-row-2">
-            <div class="form-group">
-              <label class="form-label" style="color:var(--text-muted)">В ферментёр (авто)</label>
-              <input type="number" name="fermenter_l" class="form-control" id="vol-fermenter" value="${escHtml(data.fermenter_l||'')}" step="0.5" style="background:var(--bg-secondary)" readonly>
-            </div>
-            <div class="form-group">
-              <label class="form-label" style="color:var(--text-muted)">Объём варки (авто)</label>
-              <input type="number" name="batch_size_l" class="form-control" id="vol-batch" value="${escHtml(data.batch_size_l||'')}" step="0.5" style="background:var(--bg-secondary)" readonly>
-            </div>
-          </div>
+          <input type="hidden" name="fermenter_l" id="vol-fermenter" value="${escHtml(data.fermenter_l||'')}">
+          <input type="hidden" name="batch_size_l" id="vol-batch" value="${escHtml(data.batch_size_l||'')}">
 
           <!-- Equipment profile selector -->
           ${beerProfs.length > 0 ? `
@@ -935,11 +935,56 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       </div>
     </div>
 
-    <!-- Water Chemistry -->
+    <!-- Water & Salts -->
     <div class="section-card" data-section="water">
-      <div class="section-card-header"><h4>💧 Химия воды</h4></div>
+      <div class="section-card-header"><h4>💧 Вода и Соли</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
+
+          <!-- Loss percentages -->
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label">% потерь варки</label>
+              <input type="number" name="brew_loss_pct" class="form-control" id="vol-brew-loss" value="${escHtml(data.brew_loss_pct||'')}" step="0.5" placeholder="${escHtml(String(settings.brew_loss_pct||'10'))}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">% потерь ферм.</label>
+              <input type="number" name="fermenter_loss_pct" class="form-control" id="vol-ferm-loss" value="${escHtml(data.fermenter_loss_pct||'')}" step="0.5" placeholder="${escHtml(String(settings.fermenter_loss_pct||'5'))}">
+            </div>
+          </div>
+          ${wcPackaged > 0 ? `<div class="text-muted" style="font-size:10px;margin-top:-4px;margin-bottom:4px">
+            В ферментёр: <strong>${((wcPackaged / (1 - wcFermLoss/100)) || 0).toFixed(1)} л</strong>
+            &nbsp;·&nbsp;Объём варки: <strong>${((wcPackaged / (1 - wcFermLoss/100) / (1 - wcBrewLoss/100)) || 0).toFixed(1)} л</strong>
+          </div>` : ''}
+
+          <!-- Smart water chain: ГМ | Мэш | Промывка | Пребоил | После кипа -->
+          <div class="water-chain-row">
+            <div class="water-chain-cell">
+              <label class="wc-label">ГМ</label>
+              <input type="number" name="hydromodule" class="form-control wc-input" value="${escHtml(data.hydromodule||'3')}" step="0.1" placeholder="3">
+              ${wcGrainKg > 0 ? `<span class="wc-hint">→ ${wcExpMash.toFixed(1)} л</span>` : ''}
+            </div>
+            <div class="water-chain-cell">
+              <label class="wc-label">Мэш (л)</label>
+              <input type="number" name="water_mash_l" class="form-control wc-input${wcMashMm?' wc-mismatch':''}" value="${escHtml(data.water_mash_l||'')}" step="0.1" placeholder="—">
+              ${wcHint(wcExpMash)}
+            </div>
+            <div class="water-chain-cell">
+              <label class="wc-label">Промывка (л)</label>
+              <input type="number" name="water_sparge_l" class="form-control wc-input" value="${escHtml(data.water_sparge_l||'')}" step="0.1" placeholder="—">
+            </div>
+            <div class="water-chain-cell">
+              <label class="wc-label">Пребоил (л)</label>
+              <input type="number" name="water_total_l" class="form-control wc-input${wcPreboilMm?' wc-mismatch':''}" value="${escHtml(data.water_total_l||'')}" step="0.1" placeholder="—">
+              ${wcHint(wcExpPreboil > 0 ? +wcExpPreboil.toFixed(1) : 0)}
+            </div>
+            <div class="water-chain-cell">
+              <label class="wc-label">После кипа (л)</label>
+              <input type="number" name="after_boil_l" class="form-control wc-input" value="${escHtml(String(wcExpAfterBoil > 0 ? wcExpAfterBoil : (data.after_boil_l||'')))}" step="0.1" placeholder="—" readonly style="background:var(--bg-secondary)">
+            </div>
+          </div>
+
+          <!-- Water profile & pH -->
           <div class="form-row-2">
             <div class="form-group">
               <label class="form-label">Профиль воды${recommendedProfile && recommendedProfile !== currentProfile ? `<span class="text-muted" style="font-weight:400;font-size:0.78em;margin-left:4px">рек: ${WATER_PROFILES[recommendedProfile]?.name}</span>` : ''}</label>
@@ -1012,11 +1057,6 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       </div>
       <div class="section-card-body">
         <div class="form-grid">
-          <div class="form-row-3">
-            ${formField('Гидромодуль', `<input type="number" name="hydromodule" class="form-control" value="${escHtml(data.hydromodule||'3')}" step="0.1">`)}
-            ${formField('Вода затор (л)', `<input type="number" name="water_mash_l" class="form-control" value="${escHtml(data.water_mash_l||'')}" step="0.1">`)}
-            ${formField('Вода промывка (л)', `<input type="number" name="water_sparge_l" class="form-control" value="${escHtml(data.water_sparge_l||'')}" step="0.1">`)}
-          </div>
           <div id="mash-rests-list">${renderMashBlocks(mashRests)}</div>
           <button type="button" class="btn btn-secondary btn-add-mash-rest">+ Добавить паузу</button>
         </div>
