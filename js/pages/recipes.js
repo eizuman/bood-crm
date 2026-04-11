@@ -911,9 +911,12 @@ function renderMashBlocks(rests) {
             value="${escHtml(r.duration_min||'60')}" style="width:58px" step="5">
           <span class="text-muted" style="font-size:11px">мин</span>
         </div>
-        <select class="form-control mash-rest-field" data-idx="${i}" data-field="rest_type" style="width:96px">
+        <select class="form-control mash-rest-field" data-idx="${i}" data-field="rest_type" style="width:100px">
           <option value="rest"      ${r.rest_type==='rest'      ?'selected':''}>Пауза</option>
+          <option value="step"      ${r.rest_type==='step'      ?'selected':''}>Ступенчатая</option>
+          <option value="protein"   ${r.rest_type==='protein'   ?'selected':''}>Белковая</option>
           <option value="decoction" ${r.rest_type==='decoction' ?'selected':''}>Декокция</option>
+          <option value="mash_out"  ${r.rest_type==='mash_out'  ?'selected':''}>Мэш-аут</option>
         </select>
       </div>
     </div>`).join('');
@@ -1064,7 +1067,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             </div>
             <div class="recipe-stat-block">
               <div class="recipe-stat-value stat-ibu" id="stat-ibu">${escHtml(data.ibu_estimated||'—')}</div>
-              <div class="recipe-stat-label">IBU${selectedStyle?.ibu?`<span class="recipe-stat-target"> ${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</span>`:''}</div>
+              <div class="recipe-stat-label">IBU <span class="text-muted" style="font-weight:400;font-size:0.78em">Tinseth</span>${selectedStyle?.ibu?`<span class="recipe-stat-target"> ${selectedStyle.ibu[0]}–${selectedStyle.ibu[1]}</span>`:''}</div>
             </div>
             <div class="recipe-stat-block">
               <div class="recipe-stat-value stat-ebc" id="stat-ebc">${escHtml(data.ebc_estimated||'—')}</div>
@@ -1076,17 +1079,16 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <input type="hidden" name="ebc_estimated" value="${escHtml(data.ebc_estimated||'')}">
 
           <!-- OG / FG / Упаковка -->
-          <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-bottom:3px">
-            <span style="font-size:10px;color:var(--text-muted)">OG/FG:</span>
-            ${togBtn('btn-unit-sg','SG',unit==='sg')}${togBtn('btn-unit-brix','°Bx',unit==='brix')}
-          </div>
           <div class="form-row-3">
             <div class="form-group">
-              <label class="form-label">OG ${unit==='brix'&&ogSgVal?`<span class="text-muted" style="font-weight:400">≈ SG ${ogSgVal}</span>`:''}</label>
+              <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+                <span>OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈ SG ${ogSgVal}</span>`:''}</span>
+                <span style="display:flex;align-items:center;gap:2px">${togBtn('btn-unit-sg','SG',unit==='sg')}${togBtn('btn-unit-brix','°Bx',unit==='brix')}</span>
+              </label>
               <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
             </div>
             <div class="form-group">
-              <label class="form-label">FG ${unit==='brix'&&fgSgVal?`<span class="text-muted" style="font-weight:400">≈ SG ${fgSgVal}</span>`:''}</label>
+              <label class="form-label">FG${unit==='brix'&&fgSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈ SG ${fgSgVal}</span>`:''}</label>
               <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
             </div>
             <div class="form-group">
@@ -1755,12 +1757,13 @@ function addIngredient(stageKey, ingredientsArr, refresh) {
 function addIngredientFiltered(stageKey, ingredientsArr, refresh, allowedTypes) {
   const filtered = components.filter(c => c.is_active !== 'FALSE' && allowedTypes.includes(c.type));
   if (!filtered.length) { showToast('Нет подходящих компонентов. Добавьте их в Компоненты.', 'warning'); return; }
+  const defaultTime = stageKey === 'boil' ? '60' : stageKey === 'whirlpool' ? '20' : '';
   ingredientsArr.push({
     id: genId(),
     component_id: filtered[0].id,
     qty: '',
     stage_key: stageKey,
-    time_meta: '',
+    time_meta: defaultTime,
     sort_order: String(ingredientsArr.length),
     created_at: now(),
   });
@@ -1805,6 +1808,18 @@ function resizeImageToBase64(file, maxW, maxH) {
   });
 }
 
+const MASH_REST_TYPE_MAP = {
+  saccharification: 'rest',
+  beta_amylase:     'step',
+  alpha_amylase:    'step',
+  protein:          'protein',
+  acid:             'protein',
+  decoction:        'decoction',
+  mash_out:         'mash_out',
+  rest:             'rest',
+  step:             'step',
+};
+
 function loadMashPreset(key, restsArr) {
   const preset = MASH_PRESETS[key];
   if (!preset) return;
@@ -1816,7 +1831,7 @@ function loadMashPreset(key, restsArr) {
       name: r.name,
       temp_c: String(r.temp_c),
       duration_min: String(r.duration_min),
-      rest_type: r.rest_type || 'rest',
+      rest_type: MASH_REST_TYPE_MAP[r.rest_type] || 'rest',
       sort_order: String(i),
       created_at: ts,
     });

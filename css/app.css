@@ -1150,8 +1150,11 @@ body.modal-open { overflow: hidden; }
   padding: 6px 8px;
   margin-bottom: 6px;
 }
-.mash-block[data-type="rest"]      { border-left: 3px solid rgba(251, 191, 36, 0.7); }
-.mash-block[data-type="decoction"] { border-left: 3px solid rgba(239, 68, 68, 0.7); }
+.mash-block[data-type="rest"]      { border-left: 3px solid rgba(251, 191, 36, 0.8); }
+.mash-block[data-type="step"]      { border-left: 3px solid rgba(59, 130, 246, 0.8); }
+.mash-block[data-type="protein"]   { border-left: 3px solid rgba(168, 85, 247, 0.8); }
+.mash-block[data-type="decoction"] { border-left: 3px solid rgba(239, 68, 68, 0.8); }
+.mash-block[data-type="mash_out"]  { border-left: 3px solid rgba(107, 114, 128, 0.8); }
 .mash-block-header {
   display: flex;
   gap: 6px;
