@@ -440,6 +440,25 @@ body.theme-craft .text-secondary  { color: #909094 !important; }
 body.theme-craft .dashboard-grid  { gap: 10px; }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   RECIPE MOBILE TAB BAR
+   ───────────────────────────────────────────────────────────────────────────── */
+body.theme-craft .rmt-tab {
+  background: #111114;
+  border-color: #252527;
+  color: #505058;
+  font-weight: 800;
+}
+body.theme-craft .rmt-tab.active {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #000;
+}
+body.theme-craft .rmt-tab:hover:not(.active) {
+  border-color: #3A3A3E;
+  color: #EFEFEF;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    MOBILE NAV
    ───────────────────────────────────────────────────────────────────────────── */
 body.theme-craft .mobile-nav { background: #0C0C0E; border-top-color: #1E1E20; }

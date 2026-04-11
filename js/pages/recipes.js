@@ -661,12 +661,22 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   const dryHops = ingredients.filter(i => i.stage_key === 'dry_hop');
   const packItems = ingredients.filter(i => i.stage_key === 'packaging');
 
-  container.innerHTML = `<div class="recipe-editor-grid">
+  container.innerHTML = `
+  <div class="recipe-mobile-tabs" role="tablist">
+    <button class="rmt-tab active" data-tab="overview">Обзор</button>
+    <button class="rmt-tab" data-tab="water">Вода</button>
+    <button class="rmt-tab" data-tab="grain">Засыпь</button>
+    <button class="rmt-tab" data-tab="mash">Затирание</button>
+    <button class="rmt-tab" data-tab="boil">Кипячение</button>
+    <button class="rmt-tab" data-tab="fermentation">Брожение</button>
+    <button class="rmt-tab" data-tab="packaging">Упаковка</button>
+  </div>
+  <div class="recipe-editor-grid" data-active-tab="overview">
 
   <!-- ── Column 1: Overview + Water ─────────────────────────────────────── -->
   <div class="recipe-editor-col">
 
-    <div class="section-card">
+    <div class="section-card" data-section="overview">
       <div class="section-card-header"><h4>📋 Обзор</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
@@ -774,7 +784,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
     </div>
 
     <!-- Water Chemistry -->
-    <div class="section-card">
+    <div class="section-card" data-section="water">
       <div class="section-card-header"><h4>💧 Химия воды</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
@@ -939,6 +949,15 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   </div><!-- /col 3 -->
 
   </div>`; // end .recipe-editor-grid
+
+  // Wire up mobile tab bar
+  container.querySelectorAll('.rmt-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      container.querySelectorAll('.rmt-tab').forEach(b => b.classList.toggle('active', b === btn));
+      container.querySelector('.recipe-editor-grid')?.setAttribute('data-active-tab', tab);
+    });
+  });
 }
 
 // ─── (legacy stub kept for spirit tab) ───────────────────────────────────────

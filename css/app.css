@@ -777,11 +777,70 @@ body.modal-open { overflow: hidden; }
 }
 .recipe-view-nav .btn { font-size: 12px; padding: 4px 14px; }
 
+/* ── Recipe mobile tab bar (hidden on desktop) ────────────────────────────── */
+.recipe-mobile-tabs {
+  display: none;
+}
+
 @media (max-width: 1100px) {
   .recipe-editor-grid { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 700px) {
-  .recipe-editor-grid { grid-template-columns: 1fr; }
+
+@media (max-width: 768px) {
+  /* Show tab bar */
+  .recipe-mobile-tabs {
+    display: flex;
+    overflow-x: auto;
+    gap: 4px;
+    padding: 0 0 10px;
+    margin-bottom: 4px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .recipe-mobile-tabs::-webkit-scrollbar { display: none; }
+
+  .rmt-tab {
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 5px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.12s;
+  }
+  .rmt-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+  }
+
+  /* Flatten grid → one visible section at a time */
+  .recipe-editor-grid {
+    display: block !important;
+  }
+  .recipe-editor-col {
+    display: contents;
+  }
+  /* Hide all section cards by default */
+  .recipe-editor-grid .section-card {
+    display: none !important;
+  }
+  /* Show only the active tab's card */
+  .recipe-editor-grid[data-active-tab="overview"]     .section-card[data-section="overview"],
+  .recipe-editor-grid[data-active-tab="water"]        .section-card[data-section="water"],
+  .recipe-editor-grid[data-active-tab="grain"]        .section-card[data-section="grain"],
+  .recipe-editor-grid[data-active-tab="mash"]         .section-card[data-section="mash"],
+  .recipe-editor-grid[data-active-tab="boil"]         .section-card[data-section="boil"],
+  .recipe-editor-grid[data-active-tab="fermentation"] .section-card[data-section="fermentation"],
+  .recipe-editor-grid[data-active-tab="packaging"]    .section-card[data-section="packaging"] {
+    display: block !important;
+  }
 }
 
 /* Water chemistry */
