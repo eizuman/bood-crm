@@ -1,5 +1,5 @@
 // Bood CRM — Recipes Page (Beer & Spirit)
-import { getRows, appendRow, appendRows, updateRow, softDelete, genId, now } from '../sheets.js';
+import { getRows, appendRow, appendRows, updateRow, softDelete, deleteRow, genId, now } from '../sheets.js';
 import { getSettings } from '../sheets.js';
 import { BJCP_STYLES, getBjcpGroups, sgToBrix, brixToSg, MASH_PRESETS } from '../bjcp.js';
 import { BREWING_SALTS, WATER_PROFILES, getStyleWaterProfile, calcWaterProfile, calcIBUTinseth, calcEBC } from '../water.js';
@@ -119,6 +119,9 @@ function showRecipeEditor(recipe, pageContainer) {
   let recipeData = recipe ? { ...recipe } : { type: recipeType, is_active: 'TRUE' };
   let recipeIngredients = recipe ? ingredients.filter(i => i.recipe_id === recipe.id) : [];
   let recipeMashRests = recipe ? mashRests.filter(r => r.recipe_id === recipe.id) : [];
+  // Track IDs that were already in the sheet when we opened this editor
+  const savedIngredientIds = new Set(recipeIngredients.map(i => i.id));
+  const savedRestIds       = new Set(recipeMashRests.map(r => r.id));
   let isDirty = false;
 
   const spiritTabs = [
@@ -290,20 +293,24 @@ function showRecipeEditor(recipe, pageContainer) {
       addIngredient('aging', recipeIngredients, renderView);
     });
 
-    // Remove ingredient buttons
+    // Remove ingredient buttons — also delete from sheet if already saved
     tabContent.querySelectorAll('.btn-remove-ingredient').forEach(btn => {
       btn.addEventListener('click', () => {
         const ingId = btn.dataset.id;
+        const ing   = recipeIngredients.find(i => i.id === ingId);
         recipeIngredients = recipeIngredients.filter(i => i.id !== ingId);
+        if (ing?.recipe_id) deleteRow('RecipeIngredients', ingId).catch(() => {});
         renderView();
       });
     });
 
-    // Remove mash rest
+    // Remove mash rest — also delete from sheet if already saved
     tabContent.querySelectorAll('.btn-remove-rest').forEach(btn => {
       btn.addEventListener('click', () => {
-        const idx = parseInt(btn.dataset.idx);
+        const idx  = parseInt(btn.dataset.idx);
+        const rest = recipeMashRests[idx];
         recipeMashRests.splice(idx, 1);
+        if (rest?.recipe_id) deleteRow('RecipeMashRests', rest.id).catch(() => {});
         renderView();
       });
     });
@@ -708,11 +715,13 @@ function showRecipeEditor(recipe, pageContainer) {
         if (isNew) {
           await appendRows('RecipeIngredients', newIngredients);
         } else {
-          // Update existing or append new
           for (const ing of newIngredients) {
-            const existing = ingredients.find(i => i.id === ing.id);
-            if (existing) await updateRow('RecipeIngredients', ing.id, ing).catch(() => {});
-            else await appendRow('RecipeIngredients', ing);
+            if (savedIngredientIds.has(ing.id)) {
+              await updateRow('RecipeIngredients', ing.id, ing).catch(() => {});
+            } else {
+              await appendRow('RecipeIngredients', ing);
+              savedIngredientIds.add(ing.id); // prevent double-append on multi-save
+            }
           }
         }
       }
@@ -730,9 +739,12 @@ function showRecipeEditor(recipe, pageContainer) {
           await appendRows('RecipeMashRests', newRests);
         } else {
           for (const rest of newRests) {
-            const existing = mashRests.find(r => r.id === rest.id);
-            if (existing) await updateRow('RecipeMashRests', rest.id, rest).catch(() => {});
-            else await appendRow('RecipeMashRests', rest);
+            if (savedRestIds.has(rest.id)) {
+              await updateRow('RecipeMashRests', rest.id, rest).catch(() => {});
+            } else {
+              await appendRow('RecipeMashRests', rest);
+              savedRestIds.add(rest.id);
+            }
           }
         }
       }
