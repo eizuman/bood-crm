@@ -373,7 +373,7 @@ function showRecipeEditor(recipe, pageContainer) {
         const ing = recipeIngredients.find(i => i.id === ingId);
         if (ing) {
           ing.component_id = sel.value;
-          if (ing.stage_key === 'boil') recalcIBU();
+          if (['boil','whirlpool'].includes(ing.stage_key)) recalcIBU();
         }
         isDirty = true;
       });
@@ -384,33 +384,45 @@ function showRecipeEditor(recipe, pageContainer) {
       const batchVol = parseFloat(recipeData.batch_size_l) || parseFloat(recipeData.fermenter_l) || 20;
       const og       = parseFloat(recipeData.og_target) || 1.050;
       let total = 0; let hasAlpha = false;
+
+      const updateHopSpan = (hop, ibu, prefix = '') => {
+        const row = tabContent.querySelector(`.ingredient-row [data-id="${hop.id}"]`)?.closest('.ingredient-row');
+        if (!row) return;
+        let ibuSpan = row.querySelector('.hop-ibu-live');
+        if (!ibuSpan) {
+          ibuSpan = document.createElement('span');
+          ibuSpan.className = 'hop-ibu-live';
+          ibuSpan.style.cssText = 'font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0';
+          row.querySelector('.btn-remove-ingredient')?.insertAdjacentElement('beforebegin', ibuSpan);
+        }
+        ibuSpan.textContent = ibu > 0 ? `${prefix}${Math.round(ibu * 10) / 10}IBU` : '';
+      };
+
       for (const hop of recipeIngredients.filter(i => i.stage_key === 'boil')) {
         const comp = components.find(c => c.id === hop.component_id);
         if (comp?.alpha_acid) {
           hasAlpha = true;
           const ibu = calcIBUTinseth(hop.qty, comp.alpha_acid, hop.time_meta, og, batchVol);
           total += ibu;
-          // Update per-hop IBU span in DOM
-          const row = tabContent.querySelector(`.ingredient-row [data-id="${hop.id}"]`)?.closest('.ingredient-row');
-          if (row) {
-            let ibuSpan = row.querySelector('.hop-ibu-live');
-            if (!ibuSpan) {
-              ibuSpan = document.createElement('span');
-              ibuSpan.className = 'hop-ibu-live';
-              ibuSpan.style.cssText = 'font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0';
-              row.querySelector('.btn-remove-ingredient')?.insertAdjacentElement('beforebegin', ibuSpan);
-            }
-            ibuSpan.textContent = ibu > 0 ? `${Math.round(ibu * 10) / 10}IBU` : '';
-          }
+          updateHopSpan(hop, ibu);
         }
       }
+      for (const hop of recipeIngredients.filter(i => i.stage_key === 'whirlpool')) {
+        const comp = components.find(c => c.id === hop.component_id);
+        if (comp?.alpha_acid) {
+          hasAlpha = true;
+          const ibu = calcIBUTinseth(hop.qty, comp.alpha_acid, hop.time_meta, og, batchVol) * 0.4;
+          total += ibu;
+          updateHopSpan(hop, ibu, '~');
+        }
+      }
+
       if (hasAlpha) {
         const rounded = Math.round(total);
         recipeData.ibu_estimated = String(rounded);
-        const statEl = tabContent.querySelector('#stat-ibu');
-        if (statEl) statEl.textContent = rounded;
-        const hiddenEl = tabContent.querySelector('[name=ibu_estimated]');
-        if (hiddenEl) hiddenEl.value = rounded;
+        tabContent.querySelectorAll('#stat-ibu, [name=ibu_estimated]').forEach(el => {
+          if (el.tagName === 'INPUT') el.value = rounded; else el.textContent = rounded;
+        });
       }
     }
 
@@ -419,7 +431,7 @@ function showRecipeEditor(recipe, pageContainer) {
       input.addEventListener('change', () => {
         const ingId = input.dataset.id;
         const ing = recipeIngredients.find(i => i.id === ingId);
-        if (ing) { ing.qty = input.value; if (ing.stage_key === 'boil') recalcIBU(); }
+        if (ing) { ing.qty = input.value; if (['boil','whirlpool'].includes(ing.stage_key)) recalcIBU(); }
         isDirty = true;
       });
     });
@@ -427,7 +439,7 @@ function showRecipeEditor(recipe, pageContainer) {
       input.addEventListener('change', () => {
         const ingId = input.dataset.id;
         const ing = recipeIngredients.find(i => i.id === ingId);
-        if (ing) { ing.time_meta = input.value; if (ing.stage_key === 'boil') recalcIBU(); }
+        if (ing) { ing.time_meta = input.value; if (['boil','whirlpool'].includes(ing.stage_key)) recalcIBU(); }
         isDirty = true;
       });
     });
@@ -794,57 +806,60 @@ function showRecipeEditor(recipe, pageContainer) {
         await appendRow('Recipes', recipeData);
       } else {
         await updateRow('Recipes', recipeId, recipeData);
-        // Remove old ingredients & mash rests
-        const oldIngredients = ingredients.filter(i => i.recipe_id === recipeId);
-        const oldRests = mashRests.filter(r => r.recipe_id === recipeId);
-        // We'll just append new ones (soft approach: can't delete easily, so overwrite with new batch)
-        // For simplicity we'll mark old ones inactive by adding updated set
-        // Actually, we re-append all. This is a known limitation of Sheets — no real delete.
-        // Better approach: we re-use IDs if they exist
       }
 
       // Save ingredients
-      if (recipeIngredients.length > 0) {
-        const newIngredients = recipeIngredients.map((ing, i) => ({
-          ...ing,
-          id: ing.id || genId(),
-          recipe_id: recipeId,
-          sort_order: String(i),
-          created_at: ing.created_at || ts,
-        }));
-        if (isNew) {
-          await appendRows('RecipeIngredients', newIngredients);
-        } else {
-          for (const ing of newIngredients) {
-            if (savedIngredientIds.has(ing.id)) {
-              await updateRow('RecipeIngredients', ing.id, ing).catch(() => {});
-            } else {
-              await appendRow('RecipeIngredients', ing);
-              savedIngredientIds.add(ing.id); // prevent double-append on multi-save
-            }
+      const newIngredients = recipeIngredients.map((ing, i) => ({
+        ...ing,
+        id: ing.id || genId(),
+        recipe_id: recipeId,
+        sort_order: String(i),
+        created_at: ing.created_at || ts,
+      }));
+      if (isNew) {
+        if (newIngredients.length > 0) await appendRows('RecipeIngredients', newIngredients);
+      } else {
+        // Delete sheet rows that were removed (preset swap, yeast swap, manual remove)
+        const currentIngIds = new Set(newIngredients.map(i => i.id));
+        for (const oldId of savedIngredientIds) {
+          if (!currentIngIds.has(oldId)) {
+            await deleteRow('RecipeIngredients', oldId).catch(() => {});
+          }
+        }
+        for (const ing of newIngredients) {
+          if (savedIngredientIds.has(ing.id)) {
+            await updateRow('RecipeIngredients', ing.id, ing).catch(() => {});
+          } else {
+            await appendRow('RecipeIngredients', ing);
+            savedIngredientIds.add(ing.id);
           }
         }
       }
 
       // Save mash rests
-      if (recipeMashRests.length > 0) {
-        const newRests = recipeMashRests.map((rest, i) => ({
-          ...rest,
-          id: rest.id || genId(),
-          recipe_id: recipeId,
-          sort_order: String(i),
-          created_at: rest.created_at || ts,
-        }));
-        if (isNew) {
-          await appendRows('RecipeMashRests', newRests);
-        } else {
-          for (const rest of newRests) {
-            if (savedRestIds.has(rest.id)) {
-              await updateRow('RecipeMashRests', rest.id, rest).catch(() => {});
-            } else {
-              await appendRow('RecipeMashRests', rest);
-              savedRestIds.add(rest.id);
-            }
+      const newRests = recipeMashRests.map((rest, i) => ({
+        ...rest,
+        id: rest.id || genId(),
+        recipe_id: recipeId,
+        sort_order: String(i),
+        created_at: rest.created_at || ts,
+      }));
+      if (isNew) {
+        if (newRests.length > 0) await appendRows('RecipeMashRests', newRests);
+      } else {
+        // Delete sheet rows that were removed (preset load clears array, manual remove already called deleteRow)
+        const currentRestIds = new Set(newRests.map(r => r.id));
+        for (const oldId of savedRestIds) {
+          if (!currentRestIds.has(oldId)) {
+            await deleteRow('RecipeMashRests', oldId).catch(() => {});
+          }
+        }
+        for (const rest of newRests) {
+          if (savedRestIds.has(rest.id)) {
+            await updateRow('RecipeMashRests', rest.id, rest).catch(() => {});
+          } else {
+            await appendRow('RecipeMashRests', rest);
+            savedRestIds.add(rest.id);
           }
         }
       }
@@ -906,9 +921,12 @@ function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = 
   return hops.map(ing => {
     const comp = components.find(c => c.id === ing.component_id);
     const aa   = comp?.alpha_acid ? parseFloat(comp.alpha_acid) : null;
-    const ibu  = (!isWhirlpool && aa && ing.qty && ing.time_meta)
-      ? calcIBUTinseth(ing.qty, aa, ing.time_meta, og, batchVol)
+    // Whirlpool IBU: Tinseth with temperature-based utilisation factor (~40% at 85°C vs boil)
+    const ibuFactor = isWhirlpool ? 0.4 : 1.0;
+    const ibu  = (aa && ing.qty && ing.time_meta)
+      ? calcIBUTinseth(ing.qty, aa, ing.time_meta, og, batchVol) * ibuFactor
       : 0;
+    const ibuLabel = isWhirlpool && ibu > 0 ? `~${Math.round(ibu * 10) / 10}IBU` : ibu > 0 ? `${Math.round(ibu * 10) / 10}IBU` : '';
     return `
       <div class="ingredient-row ${rowCls}">
         <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" style="flex:2">
@@ -919,8 +937,8 @@ function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = 
         <span class="ingredient-unit text-muted">г</span>
         ${aa !== null ? `<span class="hop-aa-badge" style="font-size:10px;color:var(--accent-amber);white-space:nowrap;flex-shrink:0">${aa}%α</span>` : ''}
         <input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"
-          value="${escHtml(ing.time_meta||'')}" placeholder="${isWhirlpool?'мин':'мин'}" step="5" style="width:62px">
-        ${ibu > 0 ? `<span class="hop-ibu-live" style="font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0">${ibu}IBU</span>` : '<span class="hop-ibu-live" style="font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0"></span>'}
+          value="${escHtml(ing.time_meta||'')}" placeholder="мин" step="5" style="width:62px">
+        <span class="hop-ibu-live" style="font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0">${ibuLabel}</span>
         <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
       </div>`;
   }).join('');
@@ -1009,6 +1027,10 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   for (const hop of boilHops) {
     const comp = components.find(c => c.id === hop.component_id);
     if (comp?.alpha_acid) { hasAlpha = true; autoIBU += calcIBUTinseth(hop.qty, comp.alpha_acid, hop.time_meta, og, batchVol); }
+  }
+  for (const hop of whirlpool) {
+    const comp = components.find(c => c.id === hop.component_id);
+    if (comp?.alpha_acid) { hasAlpha = true; autoIBU += calcIBUTinseth(hop.qty, comp.alpha_acid, hop.time_meta, og, batchVol) * 0.4; }
   }
   if (hasAlpha) data.ibu_estimated = String(Math.round(autoIBU));
   const grainData = grains.map(g => { const c = components.find(x => x.id === g.component_id); return { qty_g: parseFloat(g.qty)||0, ebc: parseFloat(c?.ebc)||0 }; }).filter(g => g.qty_g > 0 && g.ebc > 0);
