@@ -322,21 +322,44 @@ function showRecipeEditor(recipe, pageContainer) {
         // Update alpha acid badge for hop rows
         if (row) {
           const aa = comp?.alpha_acid ? parseFloat(comp.alpha_acid) : null;
-          let badge = row.querySelector('.hop-aa-badge');
+          let aaBadge = row.querySelector('.hop-aa-badge');
           if (aa !== null) {
-            if (badge) {
-              badge.textContent = `${aa}%α`;
+            if (aaBadge) {
+              aaBadge.textContent = `${aa}%α`;
             } else {
-              badge = document.createElement('span');
-              badge.className = 'hop-aa-badge';
-              badge.style.cssText = 'font-size:10px;color:var(--accent-amber);white-space:nowrap;flex-shrink:0';
-              badge.textContent = `${aa}%α`;
-              // Insert before time input
+              aaBadge = document.createElement('span');
+              aaBadge.className = 'hop-aa-badge';
+              aaBadge.style.cssText = 'font-size:10px;color:var(--accent-amber);white-space:nowrap;flex-shrink:0';
+              aaBadge.textContent = `${aa}%α`;
               const timeEl = row.querySelector('.ingredient-time');
-              if (timeEl) timeEl.insertAdjacentElement('beforebegin', badge);
+              if (timeEl) timeEl.insertAdjacentElement('beforebegin', aaBadge);
             }
-          } else if (badge) {
-            badge.remove();
+          } else if (aaBadge) {
+            aaBadge.remove();
+          }
+        }
+
+        // Update EBC chip for grain rows
+        if (row) {
+          const newEbc = comp?.ebc ? parseFloat(comp.ebc) : 0;
+          let ebcChip  = row.querySelector('.grain-ebc-chip');
+          if (newEbc > 0) {
+            const hex = ebcToHex(newEbc);
+            if (ebcChip) {
+              ebcChip.textContent = `${newEbc}EBC`;
+              ebcChip.style.background   = `${hex}22`;
+              ebcChip.style.color        = hex;
+              ebcChip.style.borderColor  = `${hex}55`;
+            } else {
+              ebcChip = document.createElement('span');
+              ebcChip.className  = 'grain-ebc-chip';
+              ebcChip.style.cssText = `background:${hex}22;color:${hex};border:1px solid ${hex}55;border-radius:4px;padding:1px 5px;font-size:10px;white-space:nowrap;flex-shrink:0`;
+              ebcChip.textContent = `${newEbc}EBC`;
+              const removeBtn = row.querySelector('.btn-remove-ingredient');
+              if (removeBtn) removeBtn.insertAdjacentElement('beforebegin', ebcChip);
+            }
+          } else if (ebcChip) {
+            ebcChip.remove();
           }
         }
 
@@ -383,8 +406,8 @@ function showRecipeEditor(recipe, pageContainer) {
       const getN = (sel, fallback = 0) => parseFloat(tabContent.querySelector(sel)?.value) || parseFloat(fallback) || 0;
 
       const packaged = getN('[name=packaged_l]', recipeData.packaged_l);
-      const fermLoss = getN('#vol-ferm-loss', settings.fermenter_loss_pct) || 5;
-      const brewLoss = getN('#vol-brew-loss', settings.brew_loss_pct) || 10;
+      const fermLoss = parseFloat(recipeData.fermenter_loss_pct) || parseFloat(settings.fermenter_loss_pct) || 5;
+      const brewLoss = parseFloat(recipeData.brew_loss_pct)      || parseFloat(settings.brew_loss_pct)      || 10;
       const hm       = getN('[name=hydromodule]', recipeData.hydromodule) || 3;
       const boilMins = getN('[name=boil_time_min]', recipeData.boil_time_min) || 60;
 
@@ -434,12 +457,9 @@ function showRecipeEditor(recipe, pageContainer) {
     }
 
     // Trigger on any volume-affecting field change
-    ['[name=packaged_l]','#vol-brew-loss','#vol-ferm-loss',
-     '[name=hydromodule]','[name=boil_time_min]'].forEach(sel => {
+    ['[name=packaged_l]','[name=hydromodule]','[name=boil_time_min]'].forEach(sel => {
       tabContent.querySelector(sel)?.addEventListener('input', updateWaterChain);
     });
-
-    // Re-run if equipment profile changes (different boiloff params)
     tabContent.querySelector('[name=equipment_profile_id]')?.addEventListener('change', updateWaterChain);
 
     // ── BJCP style selector → auto-fill target ranges ──────────────────────────
@@ -990,7 +1010,6 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
               <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
             </div>
           </div>
-          <input type="hidden" name="fermenter_l" id="vol-fermenter" value="${escHtml(data.fermenter_l||'')}">
           <input type="hidden" name="batch_size_l" id="vol-batch" value="${escHtml(data.batch_size_l||'')}">
 
           <!-- Equipment profile selector -->
@@ -1013,23 +1032,11 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       <div class="section-card-body">
         <div class="form-grid">
 
-          <!-- Loss percentages -->
-          <div class="form-row-2">
-            <div class="form-group">
-              <label class="form-label">% потерь варки</label>
-              <input type="number" name="brew_loss_pct" class="form-control" id="vol-brew-loss" value="${escHtml(data.brew_loss_pct||'')}" step="0.5" placeholder="${escHtml(String(settings.brew_loss_pct||'10'))}">
-            </div>
-            <div class="form-group">
-              <label class="form-label">% потерь ферм.</label>
-              <input type="number" name="fermenter_loss_pct" class="form-control" id="vol-ferm-loss" value="${escHtml(data.fermenter_loss_pct||'')}" step="0.5" placeholder="${escHtml(String(settings.fermenter_loss_pct||'5'))}">
-            </div>
-          </div>
-          ${wcPackaged > 0 ? `<div class="text-muted" style="font-size:10px;margin-top:-4px;margin-bottom:4px">
-            В ферментёр: <strong>${((wcPackaged / (1 - wcFermLoss/100)) || 0).toFixed(1)} л</strong>
-            &nbsp;·&nbsp;Объём варки: <strong>${((wcPackaged / (1 - wcFermLoss/100) / (1 - wcBrewLoss/100)) || 0).toFixed(1)} л</strong>
-          </div>` : ''}
+          <!-- hidden loss% — read by updateWaterChain, sourced from settings -->
+          <input type="hidden" name="brew_loss_pct"      id="vol-brew-loss"  value="${escHtml(data.brew_loss_pct||'')}">
+          <input type="hidden" name="fermenter_loss_pct" id="vol-ferm-loss"  value="${escHtml(data.fermenter_loss_pct||'')}">
 
-          <!-- Smart water chain: ГМ | Мэш | Промывка | Пребоил | После кипа -->
+          <!-- Smart water chain: ГМ | Мэш | Промывка | Пребоил | После кипа | В ферментёр -->
           <div class="water-chain-row">
             <div class="water-chain-cell">
               <label class="wc-label">ГМ</label>
@@ -1053,6 +1060,10 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             <div class="water-chain-cell">
               <label class="wc-label">После кипа (л)</label>
               <input type="number" name="after_boil_l" class="form-control wc-input" value="${escHtml(String(wcExpAfterBoil > 0 ? wcExpAfterBoil : (data.after_boil_l||'')))}" step="0.1" placeholder="—" readonly style="background:var(--bg-secondary)">
+            </div>
+            <div class="water-chain-cell">
+              <label class="wc-label">В ферментёр (л)</label>
+              <input type="number" name="fermenter_l" class="form-control wc-input" id="vol-fermenter" value="${escHtml(data.fermenter_l||'')}" step="0.1" placeholder="—" readonly style="background:var(--bg-secondary)">
             </div>
           </div>
 
