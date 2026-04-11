@@ -371,17 +371,55 @@ function showRecipeEditor(recipe, pageContainer) {
         }
 
         const ing = recipeIngredients.find(i => i.id === ingId);
-        if (ing) ing.component_id = sel.value;
+        if (ing) {
+          ing.component_id = sel.value;
+          if (ing.stage_key === 'boil') recalcIBU();
+        }
         isDirty = true;
       });
     });
+
+    // Live IBU recalculation (Tinseth) — updates stat without full re-render
+    function recalcIBU() {
+      const batchVol = parseFloat(recipeData.batch_size_l) || parseFloat(recipeData.fermenter_l) || 20;
+      const og       = parseFloat(recipeData.og_target) || 1.050;
+      let total = 0; let hasAlpha = false;
+      for (const hop of recipeIngredients.filter(i => i.stage_key === 'boil')) {
+        const comp = components.find(c => c.id === hop.component_id);
+        if (comp?.alpha_acid) {
+          hasAlpha = true;
+          const ibu = calcIBUTinseth(hop.qty, comp.alpha_acid, hop.time_meta, og, batchVol);
+          total += ibu;
+          // Update per-hop IBU span in DOM
+          const row = tabContent.querySelector(`.ingredient-row [data-id="${hop.id}"]`)?.closest('.ingredient-row');
+          if (row) {
+            let ibuSpan = row.querySelector('.hop-ibu-live');
+            if (!ibuSpan) {
+              ibuSpan = document.createElement('span');
+              ibuSpan.className = 'hop-ibu-live';
+              ibuSpan.style.cssText = 'font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0';
+              row.querySelector('.btn-remove-ingredient')?.insertAdjacentElement('beforebegin', ibuSpan);
+            }
+            ibuSpan.textContent = ibu > 0 ? `${Math.round(ibu * 10) / 10}IBU` : '';
+          }
+        }
+      }
+      if (hasAlpha) {
+        const rounded = Math.round(total);
+        recipeData.ibu_estimated = String(rounded);
+        const statEl = tabContent.querySelector('#stat-ibu');
+        if (statEl) statEl.textContent = rounded;
+        const hiddenEl = tabContent.querySelector('[name=ibu_estimated]');
+        if (hiddenEl) hiddenEl.value = rounded;
+      }
+    }
 
     // Update ingredient qty/meta inline
     tabContent.querySelectorAll('.ingredient-qty').forEach(input => {
       input.addEventListener('change', () => {
         const ingId = input.dataset.id;
         const ing = recipeIngredients.find(i => i.id === ingId);
-        if (ing) ing.qty = input.value;
+        if (ing) { ing.qty = input.value; if (ing.stage_key === 'boil') recalcIBU(); }
         isDirty = true;
       });
     });
@@ -389,7 +427,7 @@ function showRecipeEditor(recipe, pageContainer) {
       input.addEventListener('change', () => {
         const ingId = input.dataset.id;
         const ing = recipeIngredients.find(i => i.id === ingId);
-        if (ing) ing.time_meta = input.value;
+        if (ing) { ing.time_meta = input.value; if (ing.stage_key === 'boil') recalcIBU(); }
         isDirty = true;
       });
     });
@@ -882,7 +920,7 @@ function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = 
         ${aa !== null ? `<span class="hop-aa-badge" style="font-size:10px;color:var(--accent-amber);white-space:nowrap;flex-shrink:0">${aa}%α</span>` : ''}
         <input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"
           value="${escHtml(ing.time_meta||'')}" placeholder="${isWhirlpool?'мин':'мин'}" step="5" style="width:62px">
-        ${ibu > 0 ? `<span style="font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0">${ibu}IBU</span>` : ''}
+        ${ibu > 0 ? `<span class="hop-ibu-live" style="font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0">${ibu}IBU</span>` : '<span class="hop-ibu-live" style="font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0"></span>'}
         <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
       </div>`;
   }).join('');
