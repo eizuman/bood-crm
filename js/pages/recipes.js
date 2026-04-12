@@ -1153,19 +1153,24 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <input type="hidden" name="ebc_estimated" value="${escHtml(data.ebc_estimated||'')}">
 
           <!-- OG / FG / Упаковка -->
-          <div class="form-row-3">
-            <div class="form-group">
-              <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
-                <span>OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈ SG ${ogSgVal}</span>`:''}</span>
-                <span style="display:flex;align-items:center;gap:2px">${togBtn('btn-unit-sg','SG',unit==='sg')}${togBtn('btn-unit-brix','°Bx',unit==='brix')}</span>
-              </label>
+          <div style="display:flex;gap:6px;align-items:flex-end">
+            <div class="form-group" style="flex:1;min-width:0">
+              <label class="form-label">OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈ SG ${ogSgVal}</span>`:''}</label>
               <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
             </div>
-            <div class="form-group">
+            <div style="display:flex;flex-direction:column;align-items:stretch;flex-shrink:0;padding-bottom:0">
+              <div style="display:flex;height:28px">
+                <button type="button" class="btn btn-unit-sg"
+                  style="flex:1;font-size:0.82em;font-weight:600;border-radius:4px 0 0 4px;background:${unit==='sg'?'var(--accent)':'var(--bg-secondary)'};color:${unit==='sg'?'#fff':'var(--text-muted)'};border:1px solid var(--border);cursor:pointer;padding:0 8px;white-space:nowrap">SG</button>
+                <button type="button" class="btn btn-unit-brix"
+                  style="flex:1;font-size:0.82em;font-weight:600;border-radius:0 4px 4px 0;background:${unit==='brix'?'var(--accent)':'var(--bg-secondary)'};color:${unit==='brix'?'#fff':'var(--text-muted)'};border:1px solid var(--border);border-left:none;cursor:pointer;padding:0 8px;white-space:nowrap">°Bx</button>
+              </div>
+            </div>
+            <div class="form-group" style="flex:1;min-width:0">
               <label class="form-label">FG${unit==='brix'&&fgSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈ SG ${fgSgVal}</span>`:''}</label>
               <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
             </div>
-            <div class="form-group">
+            <div class="form-group" style="flex:1;min-width:0">
               <label class="form-label">Упаковка (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
               <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
             </div>
