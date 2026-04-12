@@ -727,6 +727,7 @@ body.modal-open { overflow: hidden; }
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  overflow: hidden;
 }
 .recipe-editor-grid .section-card { margin-bottom: 0; }
 .recipe-editor-grid .section-card-header h4 { font-size: 11px; margin: 0; }
@@ -920,7 +921,7 @@ body.modal-open { overflow: hidden; }
 /* Hop row: [name] [qty 62px] [г 12px] [%α 38px] [time 56px] [IBU 46px] [✕ 24px] */
 .ingredient-row.hop-row-boil,
 .ingredient-row.hop-row-whirlpool {
-  grid-template-columns: 1fr 62px 12px 38px 56px 46px 24px;
+  grid-template-columns: 1fr 46px 12px 34px 40px 42px 24px;
 }
 /* Additive row: [name] [qty 72px] [unit 28px] [✕ 24px] */
 .ingredient-row.additive-row {
