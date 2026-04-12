@@ -1163,24 +1163,23 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <input type="hidden" name="ibu_estimated" value="${escHtml(data.ibu_estimated||'')}">
           <input type="hidden" name="ebc_estimated" value="${escHtml(data.ebc_estimated||'')}">
 
-          <!-- OG / SG-toggle / FG / Упаковка — CSS Grid -->
-          <div class="og-fg-grid">
-            <label class="form-label">OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${ogSgVal}</span>`:''}</label>
-            <span></span>
-            <label class="form-label">FG${unit==='brix'&&fgSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${fgSgVal}</span>`:''}</label>
-            <label class="form-label">Упаковка (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
-            <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
-            <div class="og-unit-toggle">
+          <!-- OG / SG-toggle / FG / Упаковка / Труд — two explicit flex rows -->
+          <div style="display:flex;gap:6px;margin-bottom:2px;align-items:flex-end">
+            <label class="form-label" style="flex:1;margin:0">OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${ogSgVal}</span>`:''}</label>
+            <span style="width:64px;flex-shrink:0"></span>
+            <label class="form-label" style="flex:1;margin:0">FG${unit==='brix'&&fgSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${fgSgVal}</span>`:''}</label>
+            <label class="form-label" style="flex:1;margin:0">Упаковка (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
+            <label class="form-label" style="width:80px;flex-shrink:0;margin:0">Труд (ч)</label>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:4px;align-items:stretch">
+            <input type="number" name="og_target" class="form-control" style="flex:1;margin:0" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
+            <div class="og-unit-toggle" style="width:64px;flex-shrink:0">
               <button type="button" class="btn btn-unit-sg" style="flex:1;font-size:0.8em;font-weight:600;border-radius:4px 0 0 4px;background:${unit==='sg'?'var(--accent)':'var(--bg-secondary)'};color:${unit==='sg'?'#fff':'var(--text-muted)'};border:1px solid var(--border);cursor:pointer;padding:0 6px">SG</button>
               <button type="button" class="btn btn-unit-brix" style="flex:1;font-size:0.8em;font-weight:600;border-radius:0 4px 4px 0;background:${unit==='brix'?'var(--accent)':'var(--bg-secondary)'};color:${unit==='brix'?'#fff':'var(--text-muted)'};border:1px solid var(--border);border-left:none;cursor:pointer;padding:0 6px">°Bx</button>
             </div>
-            <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
-            <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <label class="form-label" style="margin:0;white-space:nowrap">Труд (ч)</label>
-            <input type="number" name="labor_hours" class="form-control" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="0" style="width:80px">
-            <span class="text-muted" style="font-size:11px">${parseFloat(data.labor_hours||0) > 0 ? `= ${formatCurrency(parseFloat(data.labor_hours) * parseFloat(settings.labor_rate_hour||300), settings.currency)}` : `ставка ${formatCurrency(settings.labor_rate_hour||300, settings.currency)}/ч`}</span>
+            <input type="number" name="fg_target" class="form-control" style="flex:1;margin:0" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
+            <input type="number" name="packaged_l" class="form-control" id="vol-packaged" style="flex:1;margin:0" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
+            <input type="number" name="labor_hours" class="form-control" style="width:80px;flex-shrink:0;margin:0" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="0">
           </div>
           <input type="hidden" name="batch_size_l" id="vol-batch" value="${escHtml(data.batch_size_l||'')}">
 
