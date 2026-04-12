@@ -174,11 +174,17 @@ export async function batchUpdateRows(sheetName, rows) {
     data.push({ range, values: [values] });
   }
   if (!data.length) return;
-  await sheetsRequest(
-    `/values:batchUpdate`,
-    'POST',
-    { valueInputOption: 'USER_ENTERED', data }
-  );
+  // Google counts each range in values:batchUpdate as a separate write quota unit.
+  // Chunk into 50 per call and pause 1.2 s between chunks to stay under 60/min.
+  const CHUNK = 50;
+  for (let i = 0; i < data.length; i += CHUNK) {
+    if (i > 0) await new Promise(r => setTimeout(r, 1200));
+    await sheetsRequest(
+      `/values:batchUpdate`,
+      'POST',
+      { valueInputOption: 'USER_ENTERED', data: data.slice(i, i + CHUNK) }
+    );
+  }
   invalidate(sheetName);
 }
 
