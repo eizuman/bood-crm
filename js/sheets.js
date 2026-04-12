@@ -157,6 +157,31 @@ export async function setSetting(key, value) {
   invalidate(SHEET_NAMES.SETTINGS);
 }
 
+// Update multiple rows in one API call (avoids per-row quota hits)
+// rows: [{ id, ...fields }]
+export async function batchUpdateRows(sheetName, rows) {
+  if (!rows.length) return;
+  const headers = SHEET_HEADERS[sheetName];
+  // Need fresh row positions
+  const existing = await getRows(sheetName, true);
+  const byId = new Map(existing.map(r => [r.id, r]));
+  const data = [];
+  for (const rowData of rows) {
+    const target = byId.get(rowData.id);
+    if (!target) continue;
+    const values = headers.map(h => rowData[h] ?? target[h] ?? '');
+    const range = `${sheetName}!A${target._row}:${colLetter(headers.length)}${target._row}`;
+    data.push({ range, values: [values] });
+  }
+  if (!data.length) return;
+  await sheetsRequest(
+    `/values:batchUpdate`,
+    'POST',
+    { valueInputOption: 'USER_ENTERED', data }
+  );
+  invalidate(sheetName);
+}
+
 // ─── Batch operations (atomic posting) ────────────────────────────────────────
 export async function batchUpdate(requests) {
   const token = await getAccessToken();

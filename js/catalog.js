@@ -1,5 +1,5 @@
 // Bood CRM — Ingredients catalogs
-import { getRows, appendRows, appendRow, updateRow, genId, now } from './sheets.js';
+import { getRows, appendRows, appendRow, batchUpdateRows, genId, now } from './sheets.js';
 
 export const SUPPORTED_COUNTRIES = [
   { code: 'RU', label: 'Россия (РФ)' },
@@ -305,20 +305,21 @@ export async function loadCatalog(source = 'standard', updateExisting = false) {
     }
   }
 
-  // Update existing entries (only catalog-managed fields, keep user's custom notes/brand)
-  for (const { existing: ex, catalog: c } of toUpdate) {
-    await updateRow('Components', ex.id, {
+  // Update existing entries in one batch request (avoids per-row quota)
+  if (toUpdate.length) {
+    const updateRows = toUpdate.map(({ existing: ex, catalog: c }) => ({
       ...ex,
-      unit:              c.unit,
-      cost_per_unit:     c.cost_per_unit || ex.cost_per_unit,
-      ebc:               c.ebc           || ex.ebc,
-      alpha_acid:        c.alpha_acid    || ex.alpha_acid,
-      attenuation:       c.attenuation   || ex.attenuation,
-      ferment_temp_min:  c.ferment_temp_min  || ex.ferment_temp_min,
-      ferment_temp_max:  c.ferment_temp_max  || ex.ferment_temp_max,
+      unit:                 c.unit,
+      cost_per_unit:        c.cost_per_unit        || ex.cost_per_unit,
+      ebc:                  c.ebc                  || ex.ebc,
+      alpha_acid:           c.alpha_acid           || ex.alpha_acid,
+      attenuation:          c.attenuation          || ex.attenuation,
+      ferment_temp_min:     c.ferment_temp_min     || ex.ferment_temp_min,
+      ferment_temp_max:     c.ferment_temp_max     || ex.ferment_temp_max,
       ferment_days_typical: c.ferment_days_typical || ex.ferment_days_typical,
       updated_at: ts,
-    });
+    }));
+    await batchUpdateRows('Components', updateRows);
   }
 
   return { added: toAdd.length, updated: toUpdate.length, skipped: entries.length - toAdd.length - toUpdate.length };
