@@ -727,10 +727,10 @@ body.modal-open { overflow: hidden; }
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  overflow: hidden;
 }
-.recipe-editor-grid .section-card { margin-bottom: 0; overflow: hidden; }
+.recipe-editor-grid .section-card { margin-bottom: 0; }
 .recipe-editor-grid .section-card-header h4 { font-size: 11px; margin: 0; }
+.recipe-editor-grid .section-card-body { overflow: hidden; }
 /* Hide spinners in compact ingredient inputs so narrow columns don't overflow */
 .ingredient-row input[type=number]::-webkit-inner-spin-button,
 .ingredient-row input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -855,7 +855,7 @@ body.modal-open { overflow: hidden; }
 /* Water chemistry */
 .water-salt-row {
   display: grid;
-  grid-template-columns: 1fr 56px 14px auto 24px;
+  grid-template-columns: minmax(0,1fr) 52px 14px minmax(0,1fr) 24px;
   align-items: center;
   gap: 4px;
   margin-bottom: 4px;
@@ -863,6 +863,7 @@ body.modal-open { overflow: hidden; }
 }
 .water-salt-row select { min-width: 0; width: 100%; }
 .water-salt-row input[type=number] { width: 100%; min-width: 0; }
+.water-salt-split { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .water-ions {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -925,20 +926,17 @@ body.modal-open { overflow: hidden; }
 }
 /* Grain row: [name] [qty 72px] [г 12px] [ebc 48px] [% 30px] [✕ 24px] */
 .ingredient-row.grain-row {
-  grid-template-columns: 1fr 72px 12px 48px 30px 24px;
+  grid-template-columns: minmax(0,1fr) 72px 12px 48px 30px 24px;
 }
-/* Hop row: [name] [qty 62px] [г 12px] [%α 38px] [time 56px] [IBU 46px] [✕ 24px] */
 .ingredient-row.hop-row-boil,
 .ingredient-row.hop-row-whirlpool {
-  grid-template-columns: 1fr 46px 12px 34px 48px 42px 24px;
+  grid-template-columns: minmax(0,1fr) 46px 12px 34px 48px 42px 24px;
 }
-/* Additive row: [name] [qty 72px] [unit 28px] [✕ 24px] */
 .ingredient-row.additive-row {
-  grid-template-columns: 1fr 72px 28px 24px;
+  grid-template-columns: minmax(0,1fr) 72px 28px 24px;
 }
-/* Additive row with time field: [name] [qty 68px] [unit 24px] [time 56px] [✕ 24px] */
 .ingredient-row.additive-row-timed {
-  grid-template-columns: 1fr 68px 24px 56px 24px;
+  grid-template-columns: minmax(0,1fr) 68px 24px 56px 24px;
 }
 .ing-select-fixed {
   min-width: 0;
