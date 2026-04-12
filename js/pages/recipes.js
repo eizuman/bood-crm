@@ -1204,6 +1204,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             <input type="number" name="labor_hours" class="form-control" id="inp-labor-hours" style="width:52px;flex-shrink:0;margin:0;min-width:0" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="0">
             <span id="labor-cost-live" style="font-size:10px;color:var(--text-muted)">${parseFloat(data.labor_hours||0)>0?'= '+formatCurrency(parseFloat(data.labor_hours)*parseFloat(settings.labor_rate_hour||300),settings.currency):'ставка '+formatCurrency(settings.labor_rate_hour||300,settings.currency)+'/ч'}</span>
           </div>
+          </div><!-- /OG-FG-труд flex row -->
           <input type="hidden" name="batch_size_l" id="vol-batch" value="${escHtml(data.batch_size_l||'')}">
 
           <!-- Equipment profile selector -->
