@@ -1122,11 +1122,12 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <div class="overview-top">
             <div class="overview-label-wrap">
               ${data.label_image
-                ? `<img src="${data.label_image}" class="overview-label-img btn-upload-label" title="Нажмите для замены" style="cursor:pointer">`
-                : `<div class="overview-label-placeholder btn-upload-label">📷</div>`}
+                ? `<img src="${data.label_image}" class="overview-label-img btn-upload-label" title="Нажмите для замены" style="cursor:pointer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+                : ''}
+              <div class="overview-label-placeholder btn-upload-label" style="${data.label_image ? 'display:none' : ''}">📷</div>
               <input type="file" id="label-upload" accept="image/jpeg,image/png,image/webp" style="display:none">
               <input type="hidden" name="label_image" value="${escHtml(data.label_image||'')}">
-              ${data.label_image ? `<button type="button" class="btn btn-xs btn-danger btn-clear-label" style="margin-top:4px;font-size:10px;width:100%">✕</button>` : ''}
+              ${data.label_image ? `<button type="button" class="btn-clear-label" title="Удалить фото" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.65);border:none;color:#fff;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>` : ''}
             </div>
             <div class="overview-name-wrap">
               <input type="text" name="name" class="form-control overview-name-input" value="${escHtml(data.name||'')}" placeholder="Название рецепта *">
@@ -1160,12 +1161,13 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <input type="hidden" name="ibu_estimated" value="${escHtml(data.ibu_estimated||'')}">
           <input type="hidden" name="ebc_estimated" value="${escHtml(data.ebc_estimated||'')}">
 
-          <!-- OG / SG-toggle / FG / Упаковка — CSS Grid so toggle sits at input height -->
+          <!-- OG / SG-toggle / FG / Упаковка / Труд — CSS Grid -->
           <div class="og-fg-grid">
             <label class="form-label">OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${ogSgVal}</span>`:''}</label>
             <span></span>
             <label class="form-label">FG${unit==='brix'&&fgSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${fgSgVal}</span>`:''}</label>
             <label class="form-label">Упаковка (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
+            <label class="form-label">Труд (ч)</label>
             <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
             <div class="og-unit-toggle">
               <button type="button" class="btn btn-unit-sg" style="flex:1;font-size:0.8em;font-weight:600;border-radius:4px 0 0 4px;background:${unit==='sg'?'var(--accent)':'var(--bg-secondary)'};color:${unit==='sg'?'#fff':'var(--text-muted)'};border:1px solid var(--border);cursor:pointer;padding:0 6px">SG</button>
@@ -1173,6 +1175,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             </div>
             <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
             <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
+            <input type="number" name="labor_hours" class="form-control" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="4">
           </div>
           <input type="hidden" name="batch_size_l" id="vol-batch" value="${escHtml(data.batch_size_l||'')}">
 
@@ -1474,13 +1477,6 @@ function renderBeerTab(container, tab, data, ingredients, mashRests) {
             <input type="number" name="fermenter_loss_pct" class="form-control" id="vol-ferm-loss"
               value="${escHtml(data.fermenter_loss_pct||'')}" step="0.5"
               placeholder="${escHtml(settings.fermenter_loss_pct||'5')}">
-          </div>
-        </div>
-        <div class="form-row-3">
-          <div class="form-group">
-            <label class="form-label">Часов труда</label>
-            <input type="number" name="labor_hours" class="form-control"
-              value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="4">
           </div>
         </div>
         <div class="form-row-2" style="margin-top:4px">

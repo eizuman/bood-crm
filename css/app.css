@@ -938,7 +938,7 @@ body.modal-open { overflow: hidden; }
 /* OG/FG/toggle grid */
 .og-fg-grid {
   display: grid;
-  grid-template-columns: 1fr 64px 1fr 1fr;
+  grid-template-columns: 1fr 64px 1fr 1fr 72px;
   grid-template-rows: auto auto;
   column-gap: 6px;
   row-gap: 2px;
@@ -1114,9 +1114,7 @@ body.modal-open { overflow: hidden; }
 .overview-label-wrap {
   flex-shrink: 0;
   width: 64px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  position: relative;
 }
 .overview-label-img {
   width: 64px;
