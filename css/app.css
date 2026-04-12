@@ -1103,11 +1103,15 @@ body.modal-open { overflow: hidden; }
 /* ── Print ─────────────────────────────────────────────────────────────────── */
 @media print {
   .sidebar, .mobile-nav, .page-header .page-actions,
-  .modal-footer, .btn, .posting-actions,
+  .modal-footer, .modal-header, .btn, .posting-actions,
   .no-print { display: none !important; }
   body { background: #fff; color: #000; }
   .main-content { margin: 0; }
   .main-inner { padding: 0; }
+  /* Flatten modal chrome so only content prints */
+  .modal-overlay { position: static !important; padding: 0 !important; background: none !important; display: block !important; }
+  .modal { box-shadow: none !important; border: none !important; border-radius: 0 !important; max-width: 100% !important; max-height: none !important; height: auto !important; }
+  .modal-body { padding: 4px 8px !important; overflow: visible !important; max-height: none !important; }
   .section-card {
     border: none;
     background: #fff;

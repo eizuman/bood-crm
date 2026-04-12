@@ -178,15 +178,18 @@ export function formatGravity(g) {
 
 // ─── Auto-steps generator for beer ───────────────────────────────────────────
 // Returns [{text, indent}] — indent=true for sub-items (→ prefix, no counter).
-// saltLines: pre-resolved array of strings like ['Гипс: 2.5 г', ...]
-export function generateBeerSteps(recipe, ingredients, mashRests, saltLines = []) {
+// saltData: [{name, mashG, spargeG}] — salt amounts split by mash/sparge fraction.
+export function generateBeerSteps(recipe, ingredients, mashRests, saltData = []) {
   const items = [];
   const add  = (text) => items.push({ text, indent: false });
   const sub  = (text) => items.push({ text, indent: true });
 
-  const waterMash   = parseFloat(recipe.water_mash_l)   || 0;
-  const waterSparge = parseFloat(recipe.water_sparge_l)  || 0;
-  const boilTime    = parseInt(recipe.boil_time_min)     || 60;
+  const waterMash    = parseFloat(recipe.water_mash_l)    || 0;
+  const waterSparge  = parseFloat(recipe.water_sparge_l)   || 0;
+  const boilTime     = parseInt(recipe.boil_time_min)      || 60;
+  const preboilL     = parseFloat(recipe.water_total_l)    || 0;
+  const afterBoilL   = parseFloat(recipe.after_boil_l)     || 0;
+  const fermenterL   = parseFloat(recipe.fermenter_l)      || 0;
 
   const grains      = ingredients.filter(i => i.stage_key === 'mash');
   const boilHops    = ingredients.filter(i => i.stage_key === 'boil').sort((a, b) => parseFloat(b.time_meta||0) - parseFloat(a.time_meta||0));
@@ -194,53 +197,57 @@ export function generateBeerSteps(recipe, ingredients, mashRests, saltLines = []
   const ferItems    = ingredients.filter(i => i.stage_key === 'fermentation');
   const dryHops     = ingredients.filter(i => i.stage_key === 'dry_hop');
 
-  // 1. Вода / Соли / pH
-  const waterParts = [];
-  if (waterMash)   waterParts.push(`затор ${waterMash} л`);
-  if (waterSparge) waterParts.push(`промывка ${waterSparge} л`);
-  const phTarget = recipe.ph_target;
-  if (saltLines.length || phTarget || waterParts.length) {
-    let text = 'Вода';
-    if (waterParts.length) text += `: ${waterParts.join(', ')}`;
-    if (phTarget) text += `, pH ${phTarget}`;
-    add(text);
-    saltLines.forEach(s => sub(s));
-  }
+  const mashSalts   = saltData.filter(s => s.mashG > 0);
+  const spargeSalts = saltData.filter(s => s.spargeG > 0);
 
-  // 2. Засыпь
+  // 1. Засыпь
   if (grains.length) {
     add('Засыпь');
     grains.forEach(g => sub(`${g._name || g.component_id}: ${g.qty} г`));
   }
 
-  // 3. Затирание / паузы
+  // 2. Затирание / паузы + соли затора
   if (mashRests.length) {
     const first = mashRests[0];
-    add(`Нагреть воду до ${parseFloat(first.temp_c) + 2}°C (учёт теплопотерь), засыпать солод`);
+    const phHint = recipe.ph_target ? `, pH ${recipe.ph_target}` : '';
+    add(`Нагреть затор: ${waterMash} л до ${parseFloat(first.temp_c) + 2}°C${phHint}`);
+    mashSalts.forEach(s => sub(`${s.name}: ${s.mashG} г`));
     mashRests.forEach(rest => add(`Пауза «${rest.name}»: ${rest.temp_c}°C, ${rest.duration_min} мин`));
-    if (waterSparge) add(`Промывка: ${waterSparge} л при 76°C`);
   } else if (waterMash) {
-    add(`Нагреть ${waterMash} л воды, засыпать солод, затирание`);
-    if (waterSparge) add(`Промывка: ${waterSparge} л при 76°C`);
+    const phHint = recipe.ph_target ? `, pH ${recipe.ph_target}` : '';
+    add(`Нагреть затор: ${waterMash} л${phHint}, засыпать солод`);
+    mashSalts.forEach(s => sub(`${s.name}: ${s.mashG} г`));
   }
 
-  // 4. Кипячение
-  const boilMeta = [`${boilTime} мин`];
-  if (recipe.og_preboil) boilMeta.push(`OG до кипа: ${recipe.og_preboil}`);
-  if (recipe.ph_preboil) boilMeta.push(`pH до кипа: ${recipe.ph_preboil}`);
-  add(`Кипячение ${boilMeta.join(', ')}`);
+  // 3. Промывка + соли промывки
+  if (waterSparge) {
+    add(`Промывка: ${waterSparge} л при 76°C`);
+    spargeSalts.forEach(s => sub(`${s.name}: ${s.spargeG} г`));
+  }
+
+  // 4. Кипячение (с литражами до/после)
+  const boilParts = [`${boilTime} мин`];
+  if (preboilL)          boilParts.push(`до кипа: ${preboilL} л`);
+  if (afterBoilL)        boilParts.push(`после: ${afterBoilL} л`);
+  if (recipe.og_preboil) boilParts.push(`OG до кипа: ${recipe.og_preboil}`);
+  if (recipe.ph_preboil) boilParts.push(`pH до кипа: ${recipe.ph_preboil}`);
+  add(`Кипячение ${boilParts.join(', ')}`);
   boilHops.forEach(h => sub(`${h._name || h.component_id}: ${h.qty} г — за ${h.time_meta} мин до конца`));
 
   // 5. Вирпул
   if (whirlItems.length) {
-    const wtemp = recipe.whirlpool_temp_c ? ` при ${recipe.whirlpool_temp_c}°C` : '';
-    const wtime = recipe.whirlpool_time_min ? `, ${recipe.whirlpool_time_min} мин` : '';
+    const wtemp = recipe.whirlpool_temp_c    ? ` при ${recipe.whirlpool_temp_c}°C`     : '';
+    const wtime = recipe.whirlpool_time_min  ? `, ${recipe.whirlpool_time_min} мин`    : '';
     add(`Вирпул${wtemp}${wtime}`);
     whirlItems.forEach(h => sub(`${h._name || h.component_id}: ${h.qty} г`));
   }
 
-  // 6. Охлаждение
-  if (recipe.ferment_temp_c) add(`Охлаждение до ${recipe.ferment_temp_c}°C`);
+  // 6. Охлаждение + внесение в ферментёр
+  if (recipe.ferment_temp_c || fermenterL) {
+    const tempPart = recipe.ferment_temp_c ? `Охлаждение до ${recipe.ferment_temp_c}°C` : 'Охлаждение';
+    const fermPart = fermenterL ? `, внести в ферментёр (${fermenterL} л)` : '';
+    add(`${tempPart}${fermPart}`);
+  }
 
   // 7. Брожение / дрожжи
   if (ferItems.length) {

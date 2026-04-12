@@ -1750,20 +1750,30 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
     return { ...ing, _name: comp?.name || ing.component_id, _unit: comp?.unit || '' };
   });
 
-  // Resolve salt names for the step generator
-  let saltLines = [];
+  // Resolve salt names with mash/sparge split for the step generator
+  let saltData = [];
   try {
     const adds = JSON.parse(data.water_additions || '[]');
-    saltLines = adds
+    const waterMashL   = parseFloat(data.water_mash_l)   || 0;
+    const waterSpargeL = parseFloat(data.water_sparge_l)  || 0;
+    const waterTotalL  = waterMashL + waterSpargeL;
+    const mashFrac   = waterTotalL > 0 ? waterMashL   / waterTotalL : 1;
+    const spargeFrac = waterTotalL > 0 ? waterSpargeL / waterTotalL : 0;
+    saltData = adds
       .filter(a => parseFloat(a.amount) > 0)
       .map(a => {
-        const s = BREWING_SALTS.find(x => x.id === a.salt);
-        return `${s ? s.name : a.salt}: ${a.amount} г`;
+        const s     = BREWING_SALTS.find(x => x.id === a.salt);
+        const total = parseFloat(a.amount) || 0;
+        return {
+          name:    s ? s.name : a.salt,
+          mashG:   waterMashL   > 0 ? +(total * mashFrac).toFixed(1)   : total,
+          spargeG: waterSpargeL > 0 ? +(total * spargeFrac).toFixed(1) : 0,
+        };
       });
   } catch {}
 
   const steps = type === 'beer'
-    ? generateBeerSteps(data, enriched, mashRests, saltLines)
+    ? generateBeerSteps(data, enriched, mashRests, saltData)
     : generateSpiritSteps(data, enriched);
 
   // Render steps: numbered for main, indented arrow for sub-items
@@ -1806,13 +1816,14 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
   const total = ingCosts + energy + labor + water;
   const perL = data.batch_size_l ? (total / parseFloat(data.batch_size_l)).toFixed(2) : 0;
 
-  // Header meta line: OG / FG / ABV / batch size
+  // Header meta line: OG / FG / ABV / IBU / packaged volume
   const metaParts = [];
-  if (data.og_target) metaParts.push(`OG: ${data.og_target}`);
-  if (data.fg_target) metaParts.push(`FG: ${data.fg_target}`);
+  if (data.og_target)     metaParts.push(`OG: ${data.og_target}`);
+  if (data.fg_target)     metaParts.push(`FG: ${data.fg_target}`);
   if (data.abv_estimated) metaParts.push(`ABV: ${data.abv_estimated}%`);
   if (data.ibu_estimated) metaParts.push(`IBU: ${data.ibu_estimated}`);
-  if (data.batch_size_l)  metaParts.push(`${data.batch_size_l} л`);
+  const volLabel = parseFloat(data.packaged_l) ? `${data.packaged_l} л` : (data.batch_size_l ? `${data.batch_size_l} л` : null);
+  if (volLabel) metaParts.push(volLabel);
 
   container.innerHTML = `
     <div class="costs-grid">
