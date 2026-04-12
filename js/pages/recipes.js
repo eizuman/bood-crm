@@ -936,11 +936,11 @@ function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = 
           ${hopComps.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
         </select>
         <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"
-          value="${escHtml(ing.qty||'')}" placeholder="г" step="5" style="width:70px">
-        <span class="ingredient-unit text-muted">г</span>
+          value="${escHtml(ing.qty||'')}" placeholder="г" step="5" style="width:70px;flex-shrink:0">
+        <span class="ingredient-unit text-muted" style="flex-shrink:0">г</span>
         ${aa !== null ? `<span class="hop-aa-badge" style="font-size:10px;color:var(--accent-amber);white-space:nowrap;flex-shrink:0">${aa}%α</span>` : ''}
         <input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}"
-          value="${escHtml(ing.time_meta||'')}" placeholder="мин" step="5" style="width:62px">
+          value="${escHtml(ing.time_meta||'')}" placeholder="мин" step="5" style="width:62px;flex-shrink:0">
         <span class="hop-ibu-live" style="font-size:10px;color:var(--accent-amber-light);white-space:nowrap;flex-shrink:0">${ibuLabel}</span>
         <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
       </div>`;

@@ -911,6 +911,7 @@ body.modal-open { overflow: hidden; }
   gap: 8px;
   margin-bottom: 8px;
   flex-wrap: nowrap;
+  min-width: 0;
 }
 /* Ingredient component dropdown — grows to fill available row space */
 .ing-select-fixed {
