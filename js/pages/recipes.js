@@ -940,7 +940,7 @@ function renderGrainRows(grains, totalGrainG) {
           value="${escHtml(ing.qty||'')}" placeholder="г" step="50">
         <span class="ingredient-unit text-muted" style="font-size:10px;text-align:center">г</span>
         <span class="grain-ebc-chip" style="${ebc>0?`background:${hex}22;color:${hex};border:1px solid ${hex}55`:'opacity:0'};border-radius:4px;padding:1px 3px;font-size:10px;text-align:center;white-space:nowrap">${ebc>0?ebc+'EBC':''}</span>
-        <span class="text-muted" style="font-size:10px;text-align:right">${pct}%</span>
+        <span class="text-muted" style="font-size:10px;text-align:right;flex-shrink:0">${pct}%</span>
         <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}">✕</button>
       </div>`;
   }).join('');
@@ -1296,14 +1296,14 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           </div>
           <div id="water-salts-list">
             ${waterAdditions.length === 0 ? '<p class="text-muted" style="font-size:12px">Нет добавок</p>' :
-              waterAdditions.map((add, i) => `<div class="water-salt-row" data-idx="${i}">
-                <select class="form-control water-salt-select" data-idx="${i}">
+              waterAdditions.map((add, i) => `<div class="water-salt-row" data-idx="${i}" style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
+                <select class="form-control water-salt-select" data-idx="${i}" style="flex:1;min-width:0;overflow:hidden">
                   ${BREWING_SALTS.map(s => `<option value="${s.id}" ${s.id===add.salt?'selected':''}>${s.formula} — ${escHtml(s.name)}</option>`).join('')}
                 </select>
-                <input type="number" class="form-control water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0" style="width:70px">
+                <input type="number" class="form-control water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0" style="width:52px;flex-shrink:0">
                 <span class="text-muted" style="font-size:11px;flex-shrink:0">г</span>
-                <span class="water-salt-split" data-idx="${i}">${saltSplit(parseFloat(add.amount)||0)}</span>
-                <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}">✕</button>
+                <span class="water-salt-split" data-idx="${i}" style="flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text-muted)">${saltSplit(parseFloat(add.amount)||0)}</span>
+                <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}" style="flex-shrink:0">✕</button>
               </div>`).join('')}
           </div>
         </div>

@@ -730,7 +730,6 @@ body.modal-open { overflow: hidden; }
 }
 .recipe-editor-grid .section-card { margin-bottom: 0; }
 .recipe-editor-grid .section-card-header h4 { font-size: 11px; margin: 0; }
-.recipe-editor-grid .section-card-body { overflow: hidden; }
 /* Hide spinners in compact ingredient inputs so narrow columns don't overflow */
 .ingredient-row input[type=number]::-webkit-inner-spin-button,
 .ingredient-row input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -854,15 +853,12 @@ body.modal-open { overflow: hidden; }
 
 /* Water chemistry */
 .water-salt-row {
-  display: grid;
-  grid-template-columns: minmax(0,1fr) 52px 14px minmax(0,1fr) 24px;
+  display: flex;
   align-items: center;
   gap: 4px;
   margin-bottom: 4px;
   min-width: 0;
 }
-.water-salt-row select { min-width: 0; width: 100%; }
-.water-salt-row input[type=number] { width: 100%; min-width: 0; }
 .water-salt-split { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .water-ions {
   display: grid;
@@ -916,33 +912,28 @@ body.modal-open { overflow: hidden; }
   white-space: nowrap;
 }
 
-/* Ingredient rows — CSS Grid so columns are table-like and never drift */
+/* Ingredient rows — flex layout (same pattern as mash blocks: fixed widths + SELECT fills rest) */
 .ingredient-row {
-  display: grid;
+  display: flex;
   align-items: center;
   gap: 4px;
   margin-bottom: 5px;
   min-width: 0;
 }
-/* Grain row: [name] [qty 72px] [г 12px] [ebc 48px] [% 30px] [✕ 24px] */
-.ingredient-row.grain-row {
-  grid-template-columns: minmax(0,1fr) 72px 12px 48px 30px 24px;
-}
-.ingredient-row.hop-row-boil,
-.ingredient-row.hop-row-whirlpool {
-  grid-template-columns: minmax(0,1fr) 46px 12px 34px 48px 42px 24px;
-}
-.ingredient-row.additive-row {
-  grid-template-columns: minmax(0,1fr) 72px 28px 24px;
-}
-.ingredient-row.additive-row-timed {
-  grid-template-columns: minmax(0,1fr) 68px 24px 56px 24px;
-}
-.ing-select-fixed {
-  min-width: 0;
-  width: 100%;
-  overflow: hidden;
-}
+.ing-select-fixed { flex: 1; min-width: 0; overflow: hidden; }
+.ingredient-row .ingredient-unit { flex-shrink: 0; }
+.ingredient-row .btn-remove-ingredient { flex-shrink: 0; }
+.grain-ebc-chip { flex-shrink: 0; }
+.hop-aa-badge { flex-shrink: 0; }
+.hop-ibu-live { flex-shrink: 0; }
+.ingredient-row.grain-row .ingredient-qty { width: 56px; flex-shrink: 0; }
+.ingredient-row.hop-row-boil .ingredient-qty,
+.ingredient-row.hop-row-whirlpool .ingredient-qty { width: 40px; flex-shrink: 0; }
+.ingredient-row.hop-row-boil .ingredient-time,
+.ingredient-row.hop-row-whirlpool .ingredient-time { width: 34px; flex-shrink: 0; }
+.ingredient-row.additive-row .ingredient-qty,
+.ingredient-row.additive-row-timed .ingredient-qty { width: 52px; flex-shrink: 0; }
+.ingredient-row.additive-row-timed .ingredient-time { width: 44px; flex-shrink: 0; }
 /* OG/FG/toggle grid */
 .og-fg-grid {
   display: grid;
