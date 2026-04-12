@@ -80,7 +80,15 @@ function recipeCard(r) {
   const ibu = r.ibu_estimated || '?';
   const ebc = r.ebc_estimated || '?';
   const abv = r.abv_estimated || (r.og_target && r.fg_target ? calcABV(r.og_target, r.fg_target) : '?');
-  const cost = r.estimated_cost ? formatCurrency(r.estimated_cost, settings.currency) : '?';
+  const costMat = parseFloat(r.estimated_cost) || 0;
+  const packVol = parseFloat(r.packaged_l) || parseFloat(r.batch_size_l) || 0;
+  const laborPerL = packVol > 0 ? parseFloat(r.labor_hours||0) * parseFloat(settings.labor_rate_hour||300) / packVol : 0;
+  const costFull = costMat + laborPerL;
+  const cost = costMat > 0
+    ? (laborPerL > 0
+        ? `${formatCurrency(costMat, settings.currency)} / ${formatCurrency(costFull, settings.currency)}`
+        : formatCurrency(costMat, settings.currency))
+    : '?';
 
   return `
     <div class="recipe-card" data-id="${r.id}">
@@ -560,6 +568,17 @@ function showRecipeEditor(recipe, pageContainer) {
         }
       }
       renderView();
+    });
+
+    // ── Live labor cost display ───────────────────────────────────────────────
+    const laborLiveSpan = tabContent.querySelector('#labor-cost-live');
+    const laborLiveLabel = tabContent.querySelector('#labor-cost-label');
+    tabContent.querySelector('#inp-labor-hours')?.addEventListener('input', (e) => {
+      const h = parseFloat(e.target.value) || 0;
+      const rate = parseFloat(settings.labor_rate_hour || 300);
+      const txt = h > 0 ? formatCurrency(h * rate, settings.currency) : '';
+      if (laborLiveSpan) { laborLiveSpan.textContent = txt; laborLiveSpan.style.fontSize = '10px'; laborLiveSpan.style.color = 'var(--text-muted)'; laborLiveSpan.style.whiteSpace = 'nowrap'; }
+      if (laborLiveLabel) laborLiveLabel.textContent = txt;
     });
 
     // ── Shared OG/FG unit toggle ───────────────────────────────────────────────
@@ -1165,21 +1184,24 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
 
           <!-- OG / SG-toggle / FG / Упаковка / Труд — two explicit flex rows -->
           <div style="display:flex;gap:5px;margin-bottom:2px;align-items:flex-end">
-            <label class="form-label" style="width:72px;flex-shrink:0;margin:0">OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${ogSgVal}</span>`:''}</label>
+          <div style="display:flex;gap:5px;margin-bottom:2px;align-items:flex-end">
+            <label class="form-label" style="width:60px;flex-shrink:0;margin:0">OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${ogSgVal}</span>`:''}</label>
             <span style="width:60px;flex-shrink:0"></span>
-            <label class="form-label" style="width:72px;flex-shrink:0;margin:0">FG${unit==='brix'&&fgSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${fgSgVal}</span>`:''}</label>
-            <label class="form-label" style="flex:1;min-width:0;margin:0">Упаковка (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
-            <label class="form-label" style="width:62px;flex-shrink:0;margin:0">Труд (ч)</label>
+            <label class="form-label" style="width:60px;flex-shrink:0;margin:0">FG${unit==='brix'&&fgSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${fgSgVal}</span>`:''}</label>
+            <label class="form-label" style="flex:1;min-width:0;margin:0">в упаковку (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
+            <label class="form-label" style="width:44px;flex-shrink:0;margin:0">Труд (ч)</label>
+            <label class="form-label" style="flex:1;min-width:0;margin:0;color:var(--text-muted)" id="labor-cost-label">${parseFloat(data.labor_hours||0)>0?formatCurrency(parseFloat(data.labor_hours)*parseFloat(settings.labor_rate_hour||300),settings.currency):''}</label>
           </div>
           <div style="display:flex;gap:5px;margin-bottom:4px;align-items:stretch">
-            <input type="number" name="og_target" class="form-control" style="width:72px;flex-shrink:0;min-width:0;margin:0" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
+            <input type="number" name="og_target" class="form-control" style="width:60px;flex-shrink:0;min-width:0;margin:0" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
             <div class="og-unit-toggle" style="width:60px;flex-shrink:0">
               <button type="button" class="btn btn-unit-sg" style="flex:1;font-size:0.8em;font-weight:600;border-radius:4px 0 0 4px;background:${unit==='sg'?'var(--accent)':'var(--bg-secondary)'};color:${unit==='sg'?'#fff':'var(--text-muted)'};border:1px solid var(--border);cursor:pointer;padding:0 6px">SG</button>
               <button type="button" class="btn btn-unit-brix" style="flex:1;font-size:0.8em;font-weight:600;border-radius:0 4px 4px 0;background:${unit==='brix'?'var(--accent)':'var(--bg-secondary)'};color:${unit==='brix'?'#fff':'var(--text-muted)'};border:1px solid var(--border);border-left:none;cursor:pointer;padding:0 6px">°Bx</button>
             </div>
-            <input type="number" name="fg_target" class="form-control" style="width:72px;flex-shrink:0;min-width:0;margin:0" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
+            <input type="number" name="fg_target" class="form-control" style="width:60px;flex-shrink:0;min-width:0;margin:0" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
             <input type="number" name="packaged_l" class="form-control" id="vol-packaged" style="flex:1;min-width:0;margin:0" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
-            <input type="number" name="labor_hours" class="form-control" style="width:62px;flex-shrink:0;min-width:0;margin:0" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="0">
+            <input type="number" name="labor_hours" class="form-control" id="inp-labor-hours" style="width:44px;flex-shrink:0;min-width:0;margin:0" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="0">
+            <span style="flex:1;min-width:0;display:flex;align-items:center" id="labor-cost-live"></span>
           </div>
           <input type="hidden" name="batch_size_l" id="vol-batch" value="${escHtml(data.batch_size_l||'')}">
 
