@@ -1476,6 +1476,13 @@ function renderBeerTab(container, tab, data, ingredients, mashRests) {
               placeholder="${escHtml(settings.fermenter_loss_pct||'5')}">
           </div>
         </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">Часов труда</label>
+            <input type="number" name="labor_hours" class="form-control"
+              value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="4">
+          </div>
+        </div>
         <div class="form-row-2" style="margin-top:4px">
           <div class="form-group">
             <label class="form-label" style="color:var(--text-muted)">Объём варки (л) <span style="font-size:0.78em">авто</span></label>
@@ -1610,9 +1617,10 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
           ${formField('Крепость браги %', `<input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.1">`)}
           ${formField('Объём выхода (л)', `<input type="number" name="packaged_l" class="form-control" value="${escHtml(data.packaged_l||'')}" step="0.1">`)}
         </div>
-        <div class="form-row-2">
+        <div class="form-row-3">
           ${formField('Крепость продукта %', `<input type="number" name="fg_target" class="form-control" value="${escHtml(data.fg_target||'')}" step="0.5">`)}
           ${formField('ABV %', `<input type="number" name="abv_estimated" class="form-control" value="${escHtml(data.abv_estimated||'')}">`, 'Ожидаемая крепость')}
+          ${formField('Часов труда', `<input type="number" name="labor_hours" class="form-control" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="6">`)}
         </div>
       </div>
     `;
@@ -1738,7 +1746,7 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
   const steps = type === 'beer' ? generateBeerSteps(data, ingredients, mashRests) : generateSpiritSteps(data, ingredients);
 
   const energy = (parseFloat(data.boil_time_min||60) / 60 * 2) * parseFloat(settings.electricity_cost_kwh || 6.5);
-  const labor = (parseFloat(data.ferment_days||0) > 0 ? 4 : 0) * parseFloat(settings.labor_rate_hour || 300);
+  const labor = parseFloat(data.labor_hours||0) * parseFloat(settings.labor_rate_hour || 300);
   const water = (parseFloat(data.water_total_l||0) || (parseFloat(data.water_mash_l||0) + parseFloat(data.water_sparge_l||0))) * parseFloat(settings.water_cost_l || 0.05);
   const total = ingCosts + energy + labor + water;
   const perL = data.batch_size_l ? (total / parseFloat(data.batch_size_l)).toFixed(2) : 0;
