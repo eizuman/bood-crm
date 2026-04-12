@@ -200,32 +200,34 @@ export function generateBeerSteps(recipe, ingredients, mashRests, saltData = [])
   const mashSalts   = saltData.filter(s => s.mashG > 0);
   const spargeSalts = saltData.filter(s => s.spargeG > 0);
 
-  // 1. Засыпь
-  if (grains.length) {
-    add('Засыпь');
-    grains.forEach(g => sub(`${g._name || g.component_id}: ${g.qty} г`));
-  }
-
-  // 2. Затирание / паузы + соли затора
+  // 1. Нагреть воду + соли затора
   if (mashRests.length) {
     const first = mashRests[0];
     const phHint = recipe.ph_target ? `, pH ${recipe.ph_target}` : '';
     add(`Нагреть затор: ${waterMash} л до ${parseFloat(first.temp_c) + 2}°C${phHint}`);
     mashSalts.forEach(s => sub(`${s.name}: ${s.mashG} г`));
-    mashRests.forEach(rest => add(`Пауза «${rest.name}»: ${rest.temp_c}°C, ${rest.duration_min} мин`));
   } else if (waterMash) {
     const phHint = recipe.ph_target ? `, pH ${recipe.ph_target}` : '';
-    add(`Нагреть затор: ${waterMash} л${phHint}, засыпать солод`);
+    add(`Нагреть затор: ${waterMash} л${phHint}`);
     mashSalts.forEach(s => sub(`${s.name}: ${s.mashG} г`));
   }
 
-  // 3. Промывка + соли промывки
+  // 2. Засыпь
+  if (grains.length) {
+    add('Засыпь');
+    grains.forEach(g => sub(`${g._name || g.component_id}: ${g.qty} г`));
+  }
+
+  // 3. Паузы затирания
+  mashRests.forEach(rest => add(`Пауза «${rest.name}»: ${rest.temp_c}°C, ${rest.duration_min} мин`));
+
+  // 4. Промывка + соли промывки
   if (waterSparge) {
     add(`Промывка: ${waterSparge} л при 76°C`);
     spargeSalts.forEach(s => sub(`${s.name}: ${s.spargeG} г`));
   }
 
-  // 4. Кипячение (с литражами до/после)
+  // 5. Кипячение (с литражами до/после)
   const boilParts = [`${boilTime} мин`];
   if (preboilL)          boilParts.push(`до кипа: ${preboilL} л`);
   if (afterBoilL)        boilParts.push(`после: ${afterBoilL} л`);
