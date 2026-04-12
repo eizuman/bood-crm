@@ -963,6 +963,18 @@ body.modal-open { overflow: hidden; }
 .recipe-steps { padding-left: 20px; }
 .recipe-steps li { margin-bottom: 6px; font-size: 13px; color: var(--text-secondary); }
 
+/* ── Print Recipe Sheet ────────────────────────────────────────────────────── */
+.print-recipe-sheet { padding: 4px 0 8px; }
+.print-recipe-header { margin-bottom: 10px; }
+.print-recipe-title  { font-size: 20px; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+.print-recipe-style  { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.print-recipe-meta   { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.print-steps-block   { margin-top: 8px; }
+.print-step          { display: flex; gap: 6px; font-size: 13px; color: var(--text-primary); padding: 3px 0; line-height: 1.4; }
+.print-step-num      { flex-shrink: 0; font-weight: 600; min-width: 22px; }
+.print-step-sub      { font-size: 12px; color: var(--text-secondary); padding: 1px 0 1px 28px; line-height: 1.4; }
+.print-notes-block   { }
+
 /* ── Cost Table ────────────────────────────────────────────────────────────── */
 .cost-table { width: 100%; border-collapse: collapse; }
 .cost-table td { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
@@ -1091,18 +1103,25 @@ body.modal-open { overflow: hidden; }
 /* ── Print ─────────────────────────────────────────────────────────────────── */
 @media print {
   .sidebar, .mobile-nav, .page-header .page-actions,
-  .modal-footer, .btn, .posting-actions { display: none !important; }
+  .modal-footer, .btn, .posting-actions,
+  .no-print { display: none !important; }
   body { background: #fff; color: #000; }
   .main-content { margin: 0; }
   .main-inner { padding: 0; }
   .section-card {
-    border: 1px solid #ccc;
+    border: none;
     background: #fff;
     page-break-inside: avoid;
   }
+  .costs-grid { gap: 8px; }
+  .print-recipe-title { font-size: 18px; }
+  .print-recipe-meta  { font-size: 12px; }
+  .print-step         { font-size: 12px; }
+  .print-step-sub     { font-size: 11px; }
   .data-table th { background: #f5f5f5; color: #333; }
   .data-table td { color: #000; }
   .print-header h2 { color: #8B5E0A; }
+  .print-notes-block textarea { border: none; resize: none; padding: 0; font-size: 12px; }
 }
 
 /* ── Recipe Overview top layout ────────────────────────────────────────────── */

@@ -1744,10 +1744,43 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
   const SOURCE_LABEL = { purchase: 'факт. цена', reference: 'справ. цена', none: '⚠ нет цены' };
   const SOURCE_CLASS = { purchase: 'text-success', reference: 'text-muted', none: 'text-danger' };
 
+  // Enrich ingredients with _name / _unit from components catalog
+  const enriched = ingredients.map(ing => {
+    const comp = components.find(c => c.id === ing.component_id);
+    return { ...ing, _name: comp?.name || ing.component_id, _unit: comp?.unit || '' };
+  });
+
+  // Resolve salt names for the step generator
+  let saltLines = [];
+  try {
+    const adds = JSON.parse(data.water_additions || '[]');
+    saltLines = adds
+      .filter(a => parseFloat(a.amount) > 0)
+      .map(a => {
+        const s = BREWING_SALTS.find(x => x.id === a.salt);
+        return `${s ? s.name : a.salt}: ${a.amount} г`;
+      });
+  } catch {}
+
+  const steps = type === 'beer'
+    ? generateBeerSteps(data, enriched, mashRests, saltLines)
+    : generateSpiritSteps(data, enriched);
+
+  // Render steps: numbered for main, indented arrow for sub-items
+  let stepN = 0;
+  const stepsHtml = steps.map(s => {
+    if (s.indent) {
+      return `<div class="print-step-sub">&rarr; ${escHtml(s.text)}</div>`;
+    } else {
+      stepN++;
+      return `<div class="print-step"><span class="print-step-num">${stepN}.</span>${escHtml(s.text)}</div>`;
+    }
+  }).join('');
+
   // Per-ingredient cost using effective prices
   let ingCosts = 0;
   const missingPrice = [];
-  const ingDetails = ingredients.map(ing => {
+  const ingDetails = enriched.map(ing => {
     const comp = components.find(c => c.id === ing.component_id);
     if (!comp) return null;
     const qty = parseFloat(ing.qty) || 0;
@@ -1767,95 +1800,110 @@ function renderCostsTab(container, data, ingredients, mashRests, type) {
     return need > have;
   });
 
-  const steps = type === 'beer' ? generateBeerSteps(data, ingredients, mashRests) : generateSpiritSteps(data, ingredients);
-
   const energy = (parseFloat(data.boil_time_min||60) / 60 * 2) * parseFloat(settings.electricity_cost_kwh || 6.5);
   const labor = parseFloat(data.labor_hours||0) * parseFloat(settings.labor_rate_hour || 300);
   const water = (parseFloat(data.water_total_l||0) || (parseFloat(data.water_mash_l||0) + parseFloat(data.water_sparge_l||0))) * parseFloat(settings.water_cost_l || 0.05);
   const total = ingCosts + energy + labor + water;
   const perL = data.batch_size_l ? (total / parseFloat(data.batch_size_l)).toFixed(2) : 0;
 
+  // Header meta line: OG / FG / ABV / batch size
+  const metaParts = [];
+  if (data.og_target) metaParts.push(`OG: ${data.og_target}`);
+  if (data.fg_target) metaParts.push(`FG: ${data.fg_target}`);
+  if (data.abv_estimated) metaParts.push(`ABV: ${data.abv_estimated}%`);
+  if (data.ibu_estimated) metaParts.push(`IBU: ${data.ibu_estimated}`);
+  if (data.batch_size_l)  metaParts.push(`${data.batch_size_l} л`);
+
   container.innerHTML = `
     <div class="costs-grid">
 
-      <div class="section-card">
-        <div class="section-card-header"><h4>Стоимость ингредиентов</h4></div>
-        <div class="section-card-body p-0">
-          <table class="data-table">
-            <thead><tr><th>Компонент</th><th>Кол-во</th><th>Цена/ед</th><th>Источник</th><th>Стоимость</th></tr></thead>
-            <tbody>
-              ${ingDetails.map(({ comp, qty, price, source, cost }) => `
-                <tr>
-                  <td>${escHtml(comp.name)}</td>
-                  <td>${qty} ${escHtml(comp.unit || '')}</td>
-                  <td>${price !== null ? formatCurrency(price, settings.currency) : '—'}</td>
-                  <td><span class="${SOURCE_CLASS[source]}" style="font-size:0.8em">${SOURCE_LABEL[source]}</span></td>
-                  <td>${cost !== null ? formatCurrency(cost, settings.currency) : '<span class="text-danger">?</span>'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+      <!-- ── PRINT RECIPE SHEET ─────────────────────────────── -->
+      <div class="print-recipe-sheet">
+        <div class="print-recipe-header">
+          <div class="print-recipe-title">${escHtml(data.name || '')}</div>
+          ${data.style ? `<div class="print-recipe-style">${escHtml(data.style)}</div>` : ''}
+          ${metaParts.length ? `<div class="print-recipe-meta">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : ''}
+        </div>
+        <div class="print-steps-block">
+          ${stepsHtml}
+        </div>
+        <div style="margin-top:12px">
+          <button type="button" class="btn btn-secondary no-print" onclick="window.print()">🖨 ${t('print_recipe')}</button>
         </div>
       </div>
 
-      ${missingPrice.length ? `
-        <div class="alert alert-warning">⚠ Нет цены для: <strong>${missingPrice.map(n => escHtml(n)).join(', ')}</strong>. Добавьте закупку на склад или справочную цену в компонент.</div>
-      ` : ''}
+      <!-- ── NOTES (screen + print) ─────────────────────────── -->
+      <div class="print-notes-block">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:4px">Заметки к варке</div>
+        <textarea name="manual_notes" class="form-control" rows="4">${escHtml(data.manual_notes||'')}</textarea>
+      </div>
 
-      ${deficit.length ? `
+      <!-- ── FINANCIAL INFO (screen only) ───────────────────── -->
+      <div class="no-print">
+
         <div class="section-card">
-          <div class="section-card-header"><h4>Список закупок (дефицит)</h4></div>
+          <div class="section-card-header"><h4>Стоимость ингредиентов</h4></div>
           <div class="section-card-body p-0">
             <table class="data-table">
-              <thead><tr><th>Компонент</th><th>Нужно</th><th>Есть</th><th>Дефицит</th></tr></thead>
+              <thead><tr><th>Компонент</th><th>Кол-во</th><th>Цена/ед</th><th>Источник</th><th>Стоимость</th></tr></thead>
               <tbody>
-                ${deficit.map(ing => {
-                  const comp = components.find(c => c.id === ing.component_id);
-                  const need = parseFloat(ing.qty) || 0;
-                  const have = onHand[ing.component_id] || 0;
-                  return `<tr>
-                    <td>${escHtml(comp?.name || '?')}</td>
-                    <td>${need} ${escHtml(comp?.unit || '')}</td>
-                    <td class="${have < 0 ? 'text-danger' : ''}">${have} ${escHtml(comp?.unit || '')}</td>
-                    <td class="text-danger">${(need - have).toFixed(2)} ${escHtml(comp?.unit || '')}</td>
-                  </tr>`;
-                }).join('')}
+                ${ingDetails.map(({ comp, qty, price, source, cost }) => `
+                  <tr>
+                    <td>${escHtml(comp.name)}</td>
+                    <td>${qty} ${escHtml(comp.unit || '')}</td>
+                    <td>${price !== null ? formatCurrency(price, settings.currency) : '—'}</td>
+                    <td><span class="${SOURCE_CLASS[source]}" style="font-size:0.8em">${SOURCE_LABEL[source]}</span></td>
+                    <td>${cost !== null ? formatCurrency(cost, settings.currency) : '<span class="text-danger">?</span>'}</td>
+                  </tr>
+                `).join('')}
               </tbody>
             </table>
           </div>
         </div>
-      ` : `<div class="alert alert-success">✓ Все ингредиенты в наличии на складе</div>`}
 
-      <div class="section-card">
-        <div class="section-card-header"><h4>Автоматические шаги</h4></div>
-        <div class="section-card-body">
-          <ol class="recipe-steps">${steps.map(s => `<li>${escHtml(s)}</li>`).join('')}</ol>
-        </div>
-      </div>
+        ${missingPrice.length ? `
+          <div class="alert alert-warning">⚠ Нет цены для: <strong>${missingPrice.map(n => escHtml(n)).join(', ')}</strong>. Добавьте закупку на склад или справочную цену в компонент.</div>
+        ` : ''}
 
-      <div class="section-card">
-        <div class="section-card-header"><h4>Ручные заметки</h4></div>
-        <div class="section-card-body">
-          <textarea name="manual_notes" class="form-control" rows="6">${escHtml(data.manual_notes||'')}</textarea>
-        </div>
-      </div>
+        ${deficit.length ? `
+          <div class="section-card">
+            <div class="section-card-header"><h4>Список закупок (дефицит)</h4></div>
+            <div class="section-card-body p-0">
+              <table class="data-table">
+                <thead><tr><th>Компонент</th><th>Нужно</th><th>Есть</th><th>Дефицит</th></tr></thead>
+                <tbody>
+                  ${deficit.map(ing => {
+                    const comp = components.find(c => c.id === ing.component_id);
+                    const need = parseFloat(ing.qty) || 0;
+                    const have = onHand[ing.component_id] || 0;
+                    return `<tr>
+                      <td>${escHtml(comp?.name || '?')}</td>
+                      <td>${need} ${escHtml(comp?.unit || '')}</td>
+                      <td class="${have < 0 ? 'text-danger' : ''}">${have} ${escHtml(comp?.unit || '')}</td>
+                      <td class="text-danger">${(need - have).toFixed(2)} ${escHtml(comp?.unit || '')}</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : `<div class="alert alert-success">✓ Все ингредиенты в наличии на складе</div>`}
 
-      <div class="section-card">
-        <div class="section-card-header"><h4>Предварительная стоимость</h4></div>
-        <div class="section-card-body">
-          <table class="cost-table">
-            <tr><td>Ингредиенты ${missingPrice.length ? '<span class="text-danger" style="font-size:0.8em">(часть без цены)</span>' : ''}</td><td>${formatCurrency(ingCosts, settings.currency)}</td></tr>
-            <tr><td>Электроэнергия (расч.)</td><td>${formatCurrency(energy, settings.currency)}</td></tr>
-            <tr><td>Вода</td><td>${formatCurrency(water, settings.currency)}</td></tr>
-            <tr><td>Труд (расч.)</td><td>${formatCurrency(labor, settings.currency)}</td></tr>
-            <tr class="cost-total"><td><strong>Итого</strong></td><td><strong>${formatCurrency(total, settings.currency)}</strong></td></tr>
-            ${perL ? `<tr><td>На литр</td><td>${formatCurrency(perL, settings.currency)}</td></tr>` : ''}
-          </table>
-          <div style="margin-top:16px">
-            <button type="button" class="btn btn-secondary" onclick="window.print()">🖨 ${t('print_recipe')}</button>
+        <div class="section-card">
+          <div class="section-card-header"><h4>Предварительная стоимость</h4></div>
+          <div class="section-card-body">
+            <table class="cost-table">
+              <tr><td>Ингредиенты ${missingPrice.length ? '<span class="text-danger" style="font-size:0.8em">(часть без цены)</span>' : ''}</td><td>${formatCurrency(ingCosts, settings.currency)}</td></tr>
+              <tr><td>Электроэнергия (расч.)</td><td>${formatCurrency(energy, settings.currency)}</td></tr>
+              <tr><td>Вода</td><td>${formatCurrency(water, settings.currency)}</td></tr>
+              <tr><td>Труд (расч.)</td><td>${formatCurrency(labor, settings.currency)}</td></tr>
+              <tr class="cost-total"><td><strong>Итого</strong></td><td><strong>${formatCurrency(total, settings.currency)}</strong></td></tr>
+              ${perL ? `<tr><td>На литр</td><td>${formatCurrency(perL, settings.currency)}</td></tr>` : ''}
+            </table>
           </div>
         </div>
-      </div>
+
+      </div><!-- /.no-print -->
     </div>
   `;
 }

@@ -177,79 +177,117 @@ export function formatGravity(g) {
 }
 
 // ─── Auto-steps generator for beer ───────────────────────────────────────────
-export function generateBeerSteps(recipe, ingredients, mashRests) {
-  const steps = [];
-  const waterMash = parseFloat(recipe.water_mash_l) || 0;
-  const waterSparge = parseFloat(recipe.water_sparge_l) || 0;
-  const boilTime = parseInt(recipe.boil_time_min) || 60;
+// Returns [{text, indent}] — indent=true for sub-items (→ prefix, no counter).
+// saltLines: pre-resolved array of strings like ['Гипс: 2.5 г', ...]
+export function generateBeerSteps(recipe, ingredients, mashRests, saltLines = []) {
+  const items = [];
+  const add  = (text) => items.push({ text, indent: false });
+  const sub  = (text) => items.push({ text, indent: true });
 
-  const grains = ingredients.filter(i => ['mash'].includes(i.stage_key));
-  const boilHops = ingredients.filter(i => i.stage_key === 'boil').sort((a,b) => parseFloat(b.time_meta||0) - parseFloat(a.time_meta||0));
-  const whirlpoolItems = ingredients.filter(i => i.stage_key === 'whirlpool');
-  const fermentItems = ingredients.filter(i => ['fermentation','dry_hop'].includes(i.stage_key));
-  const packItems = ingredients.filter(i => i.stage_key === 'packaging');
+  const waterMash   = parseFloat(recipe.water_mash_l)   || 0;
+  const waterSparge = parseFloat(recipe.water_sparge_l)  || 0;
+  const boilTime    = parseInt(recipe.boil_time_min)     || 60;
 
+  const grains      = ingredients.filter(i => i.stage_key === 'mash');
+  const boilHops    = ingredients.filter(i => i.stage_key === 'boil').sort((a, b) => parseFloat(b.time_meta||0) - parseFloat(a.time_meta||0));
+  const whirlItems  = ingredients.filter(i => i.stage_key === 'whirlpool');
+  const ferItems    = ingredients.filter(i => i.stage_key === 'fermentation');
+  const dryHops     = ingredients.filter(i => i.stage_key === 'dry_hop');
+
+  // 1. Вода / Соли / pH
+  const waterParts = [];
+  if (waterMash)   waterParts.push(`затор ${waterMash} л`);
+  if (waterSparge) waterParts.push(`промывка ${waterSparge} л`);
+  const phTarget = recipe.ph_target;
+  if (saltLines.length || phTarget || waterParts.length) {
+    let text = 'Вода';
+    if (waterParts.length) text += `: ${waterParts.join(', ')}`;
+    if (phTarget) text += `, pH ${phTarget}`;
+    add(text);
+    saltLines.forEach(s => sub(s));
+  }
+
+  // 2. Засыпь
+  if (grains.length) {
+    add('Засыпь');
+    grains.forEach(g => sub(`${g._name || g.component_id}: ${g.qty} г`));
+  }
+
+  // 3. Затирание / паузы
   if (mashRests.length) {
-    const firstRest = mashRests[0];
-    steps.push(`1. Нагреть ${waterMash} л воды до ${parseFloat(firstRest.temp_c)+2}°C (с учётом теплопотерь)`);
-    mashRests.forEach((rest, i) => {
-      steps.push(`${i+2}. Пауза: ${rest.name} — ${rest.temp_c}°C, ${rest.duration_min} мин`);
+    const first = mashRests[0];
+    add(`Нагреть воду до ${parseFloat(first.temp_c) + 2}°C (учёт теплопотерь), засыпать солод`);
+    mashRests.forEach(rest => add(`Пауза «${rest.name}»: ${rest.temp_c}°C, ${rest.duration_min} мин`));
+    if (waterSparge) add(`Промывка: ${waterSparge} л при 76°C`);
+  } else if (waterMash) {
+    add(`Нагреть ${waterMash} л воды, засыпать солод, затирание`);
+    if (waterSparge) add(`Промывка: ${waterSparge} л при 76°C`);
+  }
+
+  // 4. Кипячение
+  const boilMeta = [`${boilTime} мин`];
+  if (recipe.og_preboil) boilMeta.push(`OG до кипа: ${recipe.og_preboil}`);
+  if (recipe.ph_preboil) boilMeta.push(`pH до кипа: ${recipe.ph_preboil}`);
+  add(`Кипячение ${boilMeta.join(', ')}`);
+  boilHops.forEach(h => sub(`${h._name || h.component_id}: ${h.qty} г — за ${h.time_meta} мин до конца`));
+
+  // 5. Вирпул
+  if (whirlItems.length) {
+    const wtemp = recipe.whirlpool_temp_c ? ` при ${recipe.whirlpool_temp_c}°C` : '';
+    const wtime = recipe.whirlpool_time_min ? `, ${recipe.whirlpool_time_min} мин` : '';
+    add(`Вирпул${wtemp}${wtime}`);
+    whirlItems.forEach(h => sub(`${h._name || h.component_id}: ${h.qty} г`));
+  }
+
+  // 6. Охлаждение
+  if (recipe.ferment_temp_c) add(`Охлаждение до ${recipe.ferment_temp_c}°C`);
+
+  // 7. Брожение / дрожжи
+  if (ferItems.length) {
+    const yeast = ferItems[0];
+    const days  = recipe.ferment_days;
+    let text = `Брожение: ${yeast._name || yeast.component_id}`;
+    if (yeast.qty) text += ` ${yeast.qty}`;
+    if (days) text += `, ${days} дней`;
+    if (recipe.ferment_temp_c) text += ` при ${recipe.ferment_temp_c}°C`;
+    add(text);
+    ferItems.slice(1).forEach(i => sub(`${i._name || i.component_id}: ${i.qty}`));
+  } else if (recipe.ferment_days) {
+    add(`Брожение: ${recipe.ferment_days} дней при ${recipe.ferment_temp_c || '?'}°C`);
+  }
+
+  // 8. Сухое охмеление
+  if (dryHops.length) {
+    add('Сухое охмеление');
+    dryHops.forEach(h => {
+      const day = h.time_meta ? ` (день ${h.time_meta})` : '';
+      sub(`${h._name || h.component_id}: ${h.qty} г${day}`);
     });
-    steps.push(`${mashRests.length+2}. Промывка: ${waterSparge} л воды при 76°C`);
-    steps.push(`${mashRests.length+3}. Довести до кипения`);
-  } else {
-    steps.push(`1. Нагреть ${waterMash} л воды, затирание`);
-    steps.push(`2. Промывка: ${waterSparge} л`);
-    steps.push(`3. Довести до кипения`);
   }
 
-  let stepN = (mashRests.length || 1) + 3;
-  steps.push(`${stepN++}. Кипячение ${boilTime} мин`);
-
-  boilHops.forEach(h => {
-    steps.push(`  → Хмель ${h._name||h.component_id}: ${h.qty} г за ${h.time_meta} мин до конца кипячения`);
-  });
-
-  if (whirlpoolItems.length) {
-    steps.push(`${stepN++}. Вирпул`);
-    whirlpoolItems.forEach(h => { steps.push(`  → ${h._name||h.component_id}: ${h.qty} г`); });
+  // 9. Заметки
+  if (recipe.manual_notes && recipe.manual_notes.trim()) {
+    add(`Заметки: ${recipe.manual_notes.trim()}`);
   }
 
-  steps.push(`${stepN++}. Охлаждение до ${recipe.ferment_temp_c || 18}°C`);
-  steps.push(`${stepN++}. Внесение в ферментёр (${recipe.fermenter_l || '?'} л)`);
-
-  const yeast = fermentItems.find(i => i._type === 'yeast' || i.stage_key === 'fermentation');
-  if (yeast) steps.push(`${stepN++}. Внести дрожжи: ${yeast._name||yeast.component_id} ${yeast.qty}`);
-
-  const dryHops = fermentItems.filter(i => i.stage_key === 'dry_hop');
-  dryHops.forEach(h => {
-    steps.push(`${stepN++}. Сухое охмеление (день ${h.time_meta||'?'}): ${h._name||h.component_id} ${h.qty} г`);
-  });
-
-  steps.push(`${stepN++}. Упаковка через ${recipe.ferment_days || '?'} дней`);
-
-  if (packItems.length) {
-    steps.push(`${stepN++}. Упаковочные материалы:`);
-    packItems.forEach(p => { steps.push(`  → ${p._name||p.component_id}: ${p.qty}`); });
-  }
-
-  return steps;
+  return items;
 }
 
 export function generateSpiritSteps(recipe, ingredients) {
-  const steps = [];
-  let n = 1;
+  const items = [];
+  const add = (text) => items.push({ text, indent: false });
+  const sub = (text) => items.push({ text, indent: true });
   const washItems = ingredients.filter(i => i.stage_key === 'wash' || i.stage_key === 'mash');
-  steps.push(`${n++}. Подготовить брагу (${recipe.batch_size_l || '?'} л):`);
-  washItems.forEach(i => { steps.push(`  → ${i._name||i.component_id}: ${i.qty} ${i._unit||''}`); });
-  steps.push(`${n++}. Брожение при ${recipe.ferment_temp_c || '?'}°C, ${recipe.ferment_days || '?'} дней`);
-  steps.push(`${n++}. Первый перегон`);
-  steps.push(`${n++}. Второй перегон: отбор голов, тела, хвостов`);
-  steps.push(`${n++}. Разбавление до конечной крепости`);
-  steps.push(`${n++}. Выдержка (если требуется)`);
-  steps.push(`${n++}. Фильтрация`);
-  steps.push(`${n++}. Розлив`);
-  return steps;
+  add(`Подготовить брагу (${recipe.batch_size_l || '?'} л)`);
+  washItems.forEach(i => sub(`${i._name || i.component_id}: ${i.qty} ${i._unit || ''}`));
+  add(`Брожение при ${recipe.ferment_temp_c || '?'}°C, ${recipe.ferment_days || '?'} дней`);
+  add('Первый перегон');
+  add('Второй перегон: отбор голов, тела, хвостов');
+  add('Разбавление до конечной крепости');
+  add('Выдержка (если требуется)');
+  add('Фильтрация');
+  add('Розлив');
+  return items;
 }
 
 // ─── Misc ──────────────────────────────────────────────────────────────────────
