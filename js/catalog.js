@@ -1,5 +1,5 @@
 // Bood CRM — Ingredients catalogs
-import { getRows, appendRows, appendRow, genId, now } from './sheets.js';
+import { getRows, appendRows, appendRow, updateRow, genId, now } from './sheets.js';
 
 export const SUPPORTED_COUNTRIES = [
   { code: 'RU', label: 'Россия (РФ)' },
@@ -257,43 +257,69 @@ export function getCatalogCount(source = 'standard') {
   return pickCatalogEntries(source).length;
 }
 
-export async function loadCatalog(source = 'standard') {
-  const existing = await getRows('Components');
-  const existingNames = new Set(existing.map(c => c.name.trim().toLowerCase()));
+// updateExisting: when true, components matching by name get unit/cost/ebc/alpha/attenuation updated
+export async function loadCatalog(source = 'standard', updateExisting = false) {
+  const existing  = await getRows('Components');
+  const byName    = new Map(existing.map(c => [c.name.trim().toLowerCase(), c]));
 
-  const entries = pickCatalogEntries(source);
-  const toAdd = entries.filter(c => !existingNames.has(c.name.trim().toLowerCase()));
+  const entries   = pickCatalogEntries(source);
+  const toAdd     = [];
+  const toUpdate  = [];
 
-  if (!toAdd.length) {
-    return { added: 0, skipped: entries.length };
+  for (const c of entries) {
+    const key = c.name.trim().toLowerCase();
+    const ex  = byName.get(key);
+    if (!ex) {
+      toAdd.push(c);
+    } else if (updateExisting) {
+      toUpdate.push({ existing: ex, catalog: c });
+    }
   }
 
   const ts = now();
-  const rows = toAdd.map(c => ({
-    id: genId(),
-    name: c.name,
-    type: c.type,
-    unit: c.unit,
-    cost_per_unit: c.cost_per_unit || '',
-    ebc: c.ebc || '',
-    alpha_acid: c.alpha_acid || '',
-    attenuation: c.attenuation || '',
-    spirit_type: c.spirit_type || '',
-    notes: c.notes || '',
-    is_active: 'TRUE',
-    created_at: ts,
-    updated_at: ts,
-    brand: c.brand || '',
-    ferment_temp_min: c.ferment_temp_min || '',
-    ferment_temp_max: c.ferment_temp_max || '',
-    ferment_days_typical: c.ferment_days_typical || '',
-  }));
 
-  // Append in batches of 50 to stay within Sheets API limits
-  const BATCH = 50;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    await appendRows('Components', rows.slice(i, i + BATCH));
+  // Add new entries in batches
+  if (toAdd.length) {
+    const rows = toAdd.map(c => ({
+      id: genId(),
+      name: c.name,
+      type: c.type,
+      unit: c.unit,
+      cost_per_unit: c.cost_per_unit || '',
+      ebc: c.ebc || '',
+      alpha_acid: c.alpha_acid || '',
+      attenuation: c.attenuation || '',
+      spirit_type: c.spirit_type || '',
+      notes: c.notes || '',
+      is_active: 'TRUE',
+      created_at: ts,
+      updated_at: ts,
+      brand: c.brand || '',
+      ferment_temp_min: c.ferment_temp_min || '',
+      ferment_temp_max: c.ferment_temp_max || '',
+      ferment_days_typical: c.ferment_days_typical || '',
+    }));
+    const BATCH = 50;
+    for (let i = 0; i < rows.length; i += BATCH) {
+      await appendRows('Components', rows.slice(i, i + BATCH));
+    }
   }
 
-  return { added: toAdd.length, skipped: entries.length - toAdd.length };
+  // Update existing entries (only catalog-managed fields, keep user's custom notes/brand)
+  for (const { existing: ex, catalog: c } of toUpdate) {
+    await updateRow('Components', ex.id, {
+      ...ex,
+      unit:              c.unit,
+      cost_per_unit:     c.cost_per_unit || ex.cost_per_unit,
+      ebc:               c.ebc           || ex.ebc,
+      alpha_acid:        c.alpha_acid    || ex.alpha_acid,
+      attenuation:       c.attenuation   || ex.attenuation,
+      ferment_temp_min:  c.ferment_temp_min  || ex.ferment_temp_min,
+      ferment_temp_max:  c.ferment_temp_max  || ex.ferment_temp_max,
+      ferment_days_typical: c.ferment_days_typical || ex.ferment_days_typical,
+      updated_at: ts,
+    });
+  }
+
+  return { added: toAdd.length, updated: toUpdate.length, skipped: entries.length - toAdd.length - toUpdate.length };
 }

@@ -153,23 +153,32 @@ export async function renderSettings(container) {
 
       showModal('Загрузить каталог ингредиентов', `
         <div style="margin-bottom:6px;font-size:12px;color:var(--text-muted)">
-          Уже существующие компоненты (по названию) пропускаются.
+          Уже существующие компоненты (по названию) пропускаются, если не включён режим обновления.
         </div>
         ${sourceCards}
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="catalog-update-existing">
+          Обновить существующие (unit, цена, EBC, %α)
+        </label>
       `, [
         { label: 'Отмена', class: 'btn-secondary', action: 'cancel', onClick: closeModal },
         { label: 'Загрузить', class: 'btn-primary', action: 'save', onClick: async (overlay) => {
           const source = overlay.querySelector('input[name="catalog-source"]:checked')?.value || 'standard';
+          const updateExisting = overlay.querySelector('#catalog-update-existing')?.checked || false;
           const btn = overlay.querySelector('[data-action=save]');
           btn.disabled = true;
           btn.textContent = 'Загружаю...';
           try {
-            const { added, skipped } = await loadCatalog(source);
+            const { added, updated, skipped } = await loadCatalog(source, updateExisting);
             closeModal();
-            if (added > 0) {
-              showToast(`Добавлено ${added} компонентов${skipped ? `, пропущено ${skipped} (уже существуют)` : ''}`);
+            const parts = [];
+            if (added > 0) parts.push(`добавлено ${added}`);
+            if (updated > 0) parts.push(`обновлено ${updated}`);
+            if (skipped > 0) parts.push(`пропущено ${skipped}`);
+            if (parts.length > 0) {
+              showToast(`Каталог загружен: ${parts.join(', ')} компонентов`);
             } else {
-              showToast('Все компоненты каталога уже существуют', 'info');
+              showToast('Каталог уже актуален', 'info');
             }
           } catch (e) {
             showToast(e.message, 'error');
