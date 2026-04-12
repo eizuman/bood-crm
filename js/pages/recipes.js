@@ -105,7 +105,7 @@ function recipeCard(r) {
         <div class="stat"><span class="stat-label">ABV</span><span class="stat-value">${abv}%</span></div>
         <div class="stat"><span class="stat-label">IBU</span><span class="stat-value">${ibu}</span></div>
         <div class="stat"><span class="stat-label">EBC</span><span class="stat-value">${ebc}</span></div>
-        <div class="stat"><span class="stat-label">Себест.</span><span class="stat-value">${cost}</span></div>
+        <div class="stat"><span class="stat-label">за литр:</span><span class="stat-value">${cost}</span></div>
       </div>
       ${r.description ? `<p class="recipe-desc text-muted">${escHtml(r.description)}</p>` : ''}
     </div>
@@ -952,32 +952,26 @@ function renderMashBlocks(rests) {
   if (!rests.length) return '<p class="text-muted" style="font-size:12px;padding:4px 0">Нет пауз. Добавьте или выберите шаблон.</p>';
   return rests.map((r, i) => `
     <div class="mash-block" data-type="${escHtml(r.rest_type||'rest')}">
-      <div class="mash-block-header">
-        <input type="text" class="form-control mash-rest-field" data-idx="${i}" data-field="name"
-          value="${escHtml(r.name||'Осахаривание')}" placeholder="Название паузы">
-        <button type="button" class="btn btn-sm btn-danger btn-remove-rest" data-idx="${i}">✕</button>
-      </div>
-      <div class="mash-block-params">
-        <div class="mash-block-param">
-          <span class="text-muted" style="font-size:11px">🌡</span>
-          <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="temp_c"
-            value="${escHtml(r.temp_c||'65')}" style="width:58px" step="1">
-          <span class="text-muted" style="font-size:11px">°C</span>
-        </div>
-        <div class="mash-block-param">
-          <span class="text-muted" style="font-size:11px">⏱</span>
-          <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="duration_min"
-            value="${escHtml(r.duration_min||'60')}" style="width:58px" step="5">
-          <span class="text-muted" style="font-size:11px">мин</span>
-        </div>
-        <select class="form-control mash-rest-field" data-idx="${i}" data-field="rest_type" style="width:100px">
-          <option value="rest"      ${r.rest_type==='rest'      ?'selected':''}>Пауза</option>
-          <option value="step"      ${r.rest_type==='step'      ?'selected':''}>Ступенчатая</option>
-          <option value="protein"   ${r.rest_type==='protein'   ?'selected':''}>Белковая</option>
-          <option value="decoction" ${r.rest_type==='decoction' ?'selected':''}>Декокция</option>
-          <option value="mash_out"  ${r.rest_type==='mash_out'  ?'selected':''}>Мэш-аут</option>
-        </select>
-      </div>
+      <span class="text-muted" style="font-size:11px;flex-shrink:0">🌡</span>
+      <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="temp_c"
+        value="${escHtml(r.temp_c||'65')}" style="width:52px;flex-shrink:0" step="1">
+      <span class="text-muted" style="font-size:11px;flex-shrink:0">°C</span>
+      <span class="text-muted mash-block-sep">·</span>
+      <span class="text-muted" style="font-size:11px;flex-shrink:0">⏱</span>
+      <input type="number" class="form-control mash-rest-field" data-idx="${i}" data-field="duration_min"
+        value="${escHtml(r.duration_min||'60')}" style="width:52px;flex-shrink:0" step="5">
+      <span class="text-muted" style="font-size:11px;flex-shrink:0">мин</span>
+      <span class="text-muted mash-block-sep">·</span>
+      <select class="form-control mash-rest-field" data-idx="${i}" data-field="rest_type" style="width:88px;flex-shrink:0">
+        <option value="rest"      ${r.rest_type==='rest'      ?'selected':''}>Пауза</option>
+        <option value="step"      ${r.rest_type==='step'      ?'selected':''}>Ступень</option>
+        <option value="protein"   ${r.rest_type==='protein'   ?'selected':''}>Белковая</option>
+        <option value="decoction" ${r.rest_type==='decoction' ?'selected':''}>Декокция</option>
+        <option value="mash_out"  ${r.rest_type==='mash_out'  ?'selected':''}>Мэш-аут</option>
+      </select>
+      <input type="text" class="form-control mash-rest-field mash-rest-name" data-idx="${i}" data-field="name"
+        value="${escHtml(r.name||'')}" placeholder="название (опц.)">
+      <button type="button" class="btn btn-sm btn-danger btn-remove-rest" data-idx="${i}" style="flex-shrink:0">✕</button>
     </div>`).join('');
 }
 
@@ -1041,6 +1035,20 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
   if (hasAlpha) data.ibu_estimated = String(Math.round(autoIBU));
   const grainData = grains.map(g => { const c = components.find(x => x.id === g.component_id); return { qty_g: parseFloat(g.qty)||0, ebc: parseFloat(c?.ebc)||0 }; }).filter(g => g.qty_g > 0 && g.ebc > 0);
   if (grainData.length > 0) { const autoEBC = calcEBC(grainData, batchVol); if (autoEBC > 0) data.ebc_estimated = String(autoEBC); }
+
+  // Auto-calc cost per liter
+  {
+    const allIng = [...grains, ...mashAdditives, ...boilHops, ...boilAdditives, ...whirlpool, ...fermentItems, ...dryHops];
+    let totalCost = 0; let hasCost = false;
+    for (const ing of allIng) {
+      const qty = parseFloat(ing.qty) || 0;
+      if (!qty) continue;
+      const { price } = getEffectivePrice(ing.component_id, inventory, components);
+      if (price !== null) { totalCost += qty * price; hasCost = true; }
+    }
+    const packVol = parseFloat(data.packaged_l) || batchVol;
+    if (hasCost && packVol > 0) data.estimated_cost = String(Math.round(totalCost / packVol));
+  }
 
   // Grain totals
   const totalGrainG = grains.reduce((s, g) => s + (parseFloat(g.qty)||0), 0);

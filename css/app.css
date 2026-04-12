@@ -726,6 +726,7 @@ body.modal-open { overflow: hidden; }
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
 .recipe-editor-grid .section-card { margin-bottom: 0; }
 .recipe-editor-grid .section-card-header h4 { font-size: 11px; margin: 0; }
@@ -1150,34 +1151,29 @@ body.modal-open { overflow: hidden; }
 
 /* Mash blocks */
 .mash-block {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 8px;
-  margin-bottom: 6px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  min-width: 0;
 }
 .mash-block[data-type="rest"]      { border-left: 3px solid rgba(251, 191, 36, 0.8); }
 .mash-block[data-type="step"]      { border-left: 3px solid rgba(59, 130, 246, 0.8); }
 .mash-block[data-type="protein"]   { border-left: 3px solid rgba(168, 85, 247, 0.8); }
 .mash-block[data-type="decoction"] { border-left: 3px solid rgba(239, 68, 68, 0.8); }
 .mash-block[data-type="mash_out"]  { border-left: 3px solid rgba(107, 114, 128, 0.8); }
-.mash-block-header {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-bottom: 6px;
+.mash-block .mash-rest-name {
+  flex: 1;
+  min-width: 0;
 }
-.mash-block-header .form-control { flex: 1; }
-.mash-block-params {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.mash-block-param {
-  display: flex;
-  align-items: center;
-  gap: 3px;
+.mash-block .mash-block-sep {
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
 }
 
 /* Water chain row ───────────────────────────────────────────────────────────── */
