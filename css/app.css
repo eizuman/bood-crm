@@ -905,20 +905,52 @@ body.modal-open { overflow: hidden; }
   white-space: nowrap;
 }
 
+/* Ingredient rows — CSS Grid so columns are table-like and never drift */
 .ingredient-row {
-  display: flex;
+  display: grid;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex-wrap: nowrap;
+  gap: 4px;
+  margin-bottom: 5px;
   min-width: 0;
 }
-/* Ingredient component dropdown — fixed max-width so it never inflates when other row items are absent */
+/* Grain row: [name] [qty 72px] [г 12px] [ebc 48px] [% 30px] [✕ 24px] */
+.ingredient-row.grain-row {
+  grid-template-columns: 1fr 72px 12px 48px 30px 24px;
+}
+/* Hop row: [name] [qty 62px] [г 12px] [%α 38px] [time 56px] [IBU 46px] [✕ 24px] */
+.ingredient-row.hop-row-boil,
+.ingredient-row.hop-row-whirlpool {
+  grid-template-columns: 1fr 62px 12px 38px 56px 46px 24px;
+}
+/* Additive row: [name] [qty 72px] [unit 28px] [✕ 24px] */
+.ingredient-row.additive-row {
+  grid-template-columns: 1fr 72px 28px 24px;
+}
+/* Additive row with time field: [name] [qty 68px] [unit 24px] [time 56px] [✕ 24px] */
+.ingredient-row.additive-row-timed {
+  grid-template-columns: 1fr 68px 24px 56px 24px;
+}
 .ing-select-fixed {
-  flex: 1 1 0;
   min-width: 0;
-  max-width: 190px;
+  width: 100%;
   overflow: hidden;
+}
+/* OG/FG/toggle grid */
+.og-fg-grid {
+  display: grid;
+  grid-template-columns: 1fr 64px 1fr 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  row-gap: 2px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.og-fg-grid .form-label { margin-bottom: 0; }
+.og-fg-grid .form-control { margin: 0; }
+.og-unit-toggle {
+  display: flex;
+  height: 28px;
+  align-self: end;
 }
 .mash-rest-row {
   display: flex;
