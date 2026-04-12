@@ -135,8 +135,8 @@ export function calcCOGS(batch, inventoryMovements, settings) {
 // ─── Formatting ────────────────────────────────────────────────────────────────
 export function formatCurrency(amount, currency = 'RUB') {
   const n = parseFloat(amount) || 0;
-  if (currency === 'RUB') return n.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
-  return n.toLocaleString('en-US', { style: 'currency', currency: currency || 'USD' });
+  if (currency === 'RUB') return n.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toLocaleString('en-US', { style: 'currency', currency: currency || 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function formatDate(dateStr) {

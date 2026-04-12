@@ -243,10 +243,12 @@ function showRecipeEditor(recipe, pageContainer) {
         if (idx !== -1) recipeIngredients.splice(idx, 1);
       });
       if (yeastId) {
+        const fermL = parseFloat(recipeData.fermenter_l) || parseFloat(recipeData.batch_size_l) || 0;
+        const defaultQty = fermL > 0 ? String(Math.round(fermL * 0.5 * 10) / 10) : '';
         recipeIngredients.push({
           id: genId(),
           component_id: yeastId,
-          qty: '',
+          qty: defaultQty,
           stage_key: 'fermentation',
           time_meta: '',
           sort_order: String(recipeIngredients.filter(i => i.stage_key === 'fermentation').length),
@@ -273,6 +275,13 @@ function showRecipeEditor(recipe, pageContainer) {
       }
       isDirty = true;
       renderView();
+    });
+    // Yeast qty input — update qty on the existing yeast ingredient
+    tabContent.querySelector('#yeast-qty')?.addEventListener('change', (e) => {
+      const yeastIng = recipeIngredients.find(i =>
+        i.stage_key === 'fermentation' && components.find(c => c.id === i.component_id)?.type === 'yeast'
+      );
+      if (yeastIng) { yeastIng.qty = e.target.value; isDirty = true; }
     });
     // Fallback for spirit tab fermentation (uses old combined button)
     tabContent.querySelector('.btn-add-yeast')?.addEventListener('click', () => {
@@ -1348,12 +1357,24 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       <div class="section-card-header"><h4>🧬 Брожение</h4></div>
       <div class="section-card-body">
         <div class="form-grid">
-          ${formField('Дрожжи', `
-            <select class="form-control" id="yeast-select">
-              <option value="">— не выбраны —</option>
-              ${yeastComps.map(c => `<option value="${escHtml(c.id)}" ${currentYeastComp?.id===c.id?'selected':''}>${escHtml(c.name)}${c.attenuation?` (${c.attenuation}%)`:''}</option>`).join('')}
-            </select>
-          `)}
+          <div class="form-group">
+            <label class="form-label">Дрожжи</label>
+            <div style="display:flex;gap:4px;align-items:center">
+              <select class="form-control" id="yeast-select" style="flex:1;min-width:0">
+                <option value="">— не выбраны —</option>
+                ${yeastComps.map(c => `<option value="${escHtml(c.id)}" ${currentYeastComp?.id===c.id?'selected':''}>${escHtml(c.name)}${c.attenuation?` (${c.attenuation}%)`:''}</option>`).join('')}
+              </select>
+              <input type="number" id="yeast-qty" class="form-control" style="width:68px;flex-shrink:0"
+                value="${escHtml(currentYeast?.qty||'')}" placeholder="г" step="0.5" min="0">
+              <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">г</span>
+            </div>
+            ${(()=>{
+              const fermL = parseFloat(data.fermenter_l) || parseFloat(data.batch_size_l) || 0;
+              const recMin = fermL > 0 ? Math.round(fermL * 0.5 * 10) / 10 : 0;
+              const recMax = fermL > 0 ? Math.round(fermL * 1.0 * 10) / 10 : 0;
+              return fermL > 0 ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">рек. ${recMin}–${recMax} г (0.5–1.0 г/л)</div>` : '';
+            })()}
+          </div>
           <div class="form-row-2">
             <div class="form-group">
               <label class="form-label">Температура (°C)${currentYeastComp?.ferment_temp_min&&currentYeastComp?.ferment_temp_max?`<span class="text-muted" style="font-weight:400;margin-left:4px">${currentYeastComp.ferment_temp_min}–${currentYeastComp.ferment_temp_max}°C</span>`:''}</label>

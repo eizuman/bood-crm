@@ -71,19 +71,19 @@ const CATALOG_STANDARD = [
   { name: 'Perle', type: 'hop', unit: 'г', cost_per_unit: '3.50', alpha_acid: '8.0', notes: 'Мята, цветочный, пряный' },
   { name: 'Willamette', type: 'hop', unit: 'г', cost_per_unit: '4.00', alpha_acid: '5.0', notes: 'Земля, трава, цветочный' },
 
-  // ── Дрожжи ────────────────────────────────────────────────────────────
-  { name: 'Fermentis US-05', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '81', notes: 'Американский эль, чистый. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
-  { name: 'Fermentis S-04', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '75', notes: 'Английский эль, фруктовый. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
-  { name: 'Fermentis W-34/70', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '82', notes: 'Классический лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
-  { name: 'Fermentis BE-256 (Abbaye)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '81', notes: 'Бельгийский эль, фруктовый. 15-30°C', ferment_temp_min: '15', ferment_temp_max: '30', ferment_days_typical: '10' },
-  { name: 'Fermentis K-97', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '81', notes: 'Немецкий вайцен, банановый. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
-  { name: 'Fermentis S-23', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '82', notes: 'Западноевропейский лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
-  { name: 'Lallemand Nottingham', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '80', notes: 'Английский эль, нейтральный. 14-21°C', ferment_temp_min: '14', ferment_temp_max: '21', ferment_days_typical: '14' },
-  { name: 'Lallemand BRY-97', type: 'yeast', unit: 'шт', cost_per_unit: '280', attenuation: '81', notes: 'Западный американский эль. 17-23°C', ferment_temp_min: '17', ferment_temp_max: '23', ferment_days_typical: '14' },
-  { name: 'Mangrove Jack\'s M44', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '80', notes: 'US West Coast IPA. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
-  { name: 'Mangrove Jack\'s M47 (Belgian Abbey)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '72', notes: 'Бельгийский аббатский. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
-  { name: 'Mangrove Jack\'s M42 (New World)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '80', notes: 'Универсальный эль, чистый. 16-22°C', ferment_temp_min: '16', ferment_temp_max: '22', ferment_days_typical: '14' },
-  { name: 'Mangrove Jack\'s M29 (French Saison)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '83', notes: 'Сезон, пряный, сухой. 20-30°C', ferment_temp_min: '20', ferment_temp_max: '30', ferment_days_typical: '7' },
+  // ── Дрожжи (цена за грамм; пакеты Fermentis 11.5г, Lallemand/MJ ~11г) ──
+  { name: 'Fermentis US-05', type: 'yeast', unit: 'г', cost_per_unit: '24.35', attenuation: '81', notes: 'Американский эль, чистый. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
+  { name: 'Fermentis S-04', type: 'yeast', unit: 'г', cost_per_unit: '24.35', attenuation: '75', notes: 'Английский эль, фруктовый. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
+  { name: 'Fermentis W-34/70', type: 'yeast', unit: 'г', cost_per_unit: '24.35', attenuation: '82', notes: 'Классический лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
+  { name: 'Fermentis BE-256 (Abbaye)', type: 'yeast', unit: 'г', cost_per_unit: '27.83', attenuation: '81', notes: 'Бельгийский эль, фруктовый. 15-30°C', ferment_temp_min: '15', ferment_temp_max: '30', ferment_days_typical: '10' },
+  { name: 'Fermentis K-97', type: 'yeast', unit: 'г', cost_per_unit: '27.83', attenuation: '81', notes: 'Немецкий вайцен, банановый. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
+  { name: 'Fermentis S-23', type: 'yeast', unit: 'г', cost_per_unit: '24.35', attenuation: '82', notes: 'Западноевропейский лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
+  { name: 'Lallemand Nottingham', type: 'yeast', unit: 'г', cost_per_unit: '25.45', attenuation: '80', notes: 'Английский эль, нейтральный. 14-21°C', ferment_temp_min: '14', ferment_temp_max: '21', ferment_days_typical: '14' },
+  { name: 'Lallemand BRY-97', type: 'yeast', unit: 'г', cost_per_unit: '25.45', attenuation: '81', notes: 'Западный американский эль. 17-23°C', ferment_temp_min: '17', ferment_temp_max: '23', ferment_days_typical: '14' },
+  { name: 'Mangrove Jack\'s M44', type: 'yeast', unit: 'г', cost_per_unit: '32.00', attenuation: '80', notes: 'US West Coast IPA. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
+  { name: 'Mangrove Jack\'s M47 (Belgian Abbey)', type: 'yeast', unit: 'г', cost_per_unit: '32.00', attenuation: '72', notes: 'Бельгийский аббатский. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
+  { name: 'Mangrove Jack\'s M42 (New World)', type: 'yeast', unit: 'г', cost_per_unit: '32.00', attenuation: '80', notes: 'Универсальный эль, чистый. 16-22°C', ferment_temp_min: '16', ferment_temp_max: '22', ferment_days_typical: '14' },
+  { name: 'Mangrove Jack\'s M29 (French Saison)', type: 'yeast', unit: 'г', cost_per_unit: '32.00', attenuation: '83', notes: 'Сезон, пряный, сухой. 20-30°C', ferment_temp_min: '20', ferment_temp_max: '30', ferment_days_typical: '7' },
 
   // ── Соли и кислоты ────────────────────────────────────────────────────
   { name: 'Сульфат кальция (Гипс, CaSO₄)', type: 'salt', unit: 'г', cost_per_unit: '0.50', notes: 'Повышает жёсткость, подчёркивает горечь' },
@@ -158,24 +158,24 @@ const CATALOG_GRAINRUS = [
   { name: 'Каскад (Cascade) HVG', type: 'hop', unit: 'г', cost_per_unit: '2.09', alpha_acid: '6.5', brand: 'HVG', notes: 'Цитрус, цветочный, грейпфрут' },
   { name: 'Хьюэлл Мелон (Huell Melon)', type: 'hop', unit: 'г', cost_per_unit: '2.80', alpha_acid: '7.2', brand: 'HVG', notes: 'Дыня, клубника, тропики' },
 
-  // ── Дрожжи Fermentis (malt.ru, цена за пакет 11.5 г) ──────────────────
-  { name: 'Safale US-05', type: 'yeast', unit: 'шт', cost_per_unit: '265', attenuation: '81', brand: 'Fermentis', notes: 'Американский эль, чистый. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
-  { name: 'Safale S-04', type: 'yeast', unit: 'шт', cost_per_unit: '255', attenuation: '75', brand: 'Fermentis', notes: 'Английский эль, фруктовый. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
-  { name: 'Safale S-33', type: 'yeast', unit: 'шт', cost_per_unit: '234', attenuation: '72', brand: 'Fermentis', notes: 'Бельгийский эль. 15-25°C', ferment_temp_min: '15', ferment_temp_max: '25', ferment_days_typical: '12' },
-  { name: 'Safale T-58', type: 'yeast', unit: 'шт', cost_per_unit: '190', attenuation: '74', brand: 'Fermentis', notes: 'Бельгийский пряный. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '12' },
-  { name: 'Safale W-68', type: 'yeast', unit: 'шт', cost_per_unit: '300', attenuation: '80', brand: 'Fermentis', notes: 'Немецкий вайцен, банановый. 18-24°C', ferment_temp_min: '18', ferment_temp_max: '24', ferment_days_typical: '10' },
-  { name: 'Safale WB-06', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '86', brand: 'Fermentis', notes: 'Пшеничное пиво, гвоздика. 18-24°C', ferment_temp_min: '18', ferment_temp_max: '24', ferment_days_typical: '10' },
-  { name: 'SafAle K-97', type: 'yeast', unit: 'шт', cost_per_unit: '285', attenuation: '81', brand: 'Fermentis', notes: 'Немецкий вайцен. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
-  { name: 'Safale BE-256', type: 'yeast', unit: 'шт', cost_per_unit: '400', attenuation: '81', brand: 'Fermentis', notes: 'Бельгийский Аббатский. 15-30°C', ferment_temp_min: '15', ferment_temp_max: '30', ferment_days_typical: '10' },
-  { name: 'Saflager W-34/70', type: 'yeast', unit: 'шт', cost_per_unit: '400', attenuation: '82', brand: 'Fermentis', notes: 'Классический лагер Weihenstephan. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
-  { name: 'Saflager S-189', type: 'yeast', unit: 'шт', cost_per_unit: '390', attenuation: '80', brand: 'Fermentis', notes: 'Швейцарский лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
-  { name: 'Saflager S-23', type: 'yeast', unit: 'шт', cost_per_unit: '360', attenuation: '82', brand: 'Fermentis', notes: 'Западноевропейский лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
-  { name: 'Saflager E-30', type: 'yeast', unit: 'шт', cost_per_unit: '450', attenuation: '78', brand: 'Fermentis', notes: 'Тёмный лагер, мюнхенский. 12-18°C', ferment_temp_min: '12', ferment_temp_max: '18', ferment_days_typical: '21' },
-  { name: 'Saflager SH-45', type: 'yeast', unit: 'шт', cost_per_unit: '420', attenuation: '82', brand: 'Fermentis', notes: 'Пильзнерский лагер. 9-12°C', ferment_temp_min: '9', ferment_temp_max: '12', ferment_days_typical: '21' },
-  { name: 'SafMead Classic', type: 'yeast', unit: 'шт', cost_per_unit: '400', attenuation: '85', brand: 'Fermentis', notes: 'Для медовухи. 15-30°C', ferment_temp_min: '15', ferment_temp_max: '30', ferment_days_typical: '21' },
-  { name: 'SafCider TF-6', type: 'yeast', unit: 'шт', cost_per_unit: '230', attenuation: '82', brand: 'Fermentis', notes: 'Сухой сидр. 18-24°C', ferment_temp_min: '18', ferment_temp_max: '24', ferment_days_typical: '10' },
-  { name: 'SafCider AB-1', type: 'yeast', unit: 'шт', cost_per_unit: '300', attenuation: '80', brand: 'Fermentis', notes: 'Полусухой сидр. 18-24°C', ferment_temp_min: '18', ferment_temp_max: '24', ferment_days_typical: '10' },
-  { name: 'SafSpirit HG-1', type: 'yeast', unit: 'шт', cost_per_unit: '1575', attenuation: '92', brand: 'Fermentis', notes: 'Высокоградусная брага (500г пакет). 25-35°C', ferment_temp_min: '25', ferment_temp_max: '35', ferment_days_typical: '7' },
+  // ── Дрожжи Fermentis (malt.ru, цена за грамм; пакеты 11.5г, спец. 5г/500г) ──
+  { name: 'Safale US-05', type: 'yeast', unit: 'г', cost_per_unit: '23.04', attenuation: '81', brand: 'Fermentis', notes: 'Американский эль, чистый. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
+  { name: 'Safale S-04', type: 'yeast', unit: 'г', cost_per_unit: '22.17', attenuation: '75', brand: 'Fermentis', notes: 'Английский эль, фруктовый. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
+  { name: 'Safale S-33', type: 'yeast', unit: 'г', cost_per_unit: '20.35', attenuation: '72', brand: 'Fermentis', notes: 'Бельгийский эль. 15-25°C', ferment_temp_min: '15', ferment_temp_max: '25', ferment_days_typical: '12' },
+  { name: 'Safale T-58', type: 'yeast', unit: 'г', cost_per_unit: '16.52', attenuation: '74', brand: 'Fermentis', notes: 'Бельгийский пряный. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '12' },
+  { name: 'Safale W-68', type: 'yeast', unit: 'г', cost_per_unit: '26.09', attenuation: '80', brand: 'Fermentis', notes: 'Немецкий вайцен, банановый. 18-24°C', ferment_temp_min: '18', ferment_temp_max: '24', ferment_days_typical: '10' },
+  { name: 'Safale WB-06', type: 'yeast', unit: 'г', cost_per_unit: '27.83', attenuation: '86', brand: 'Fermentis', notes: 'Пшеничное пиво, гвоздика. 18-24°C', ferment_temp_min: '18', ferment_temp_max: '24', ferment_days_typical: '10' },
+  { name: 'SafAle K-97', type: 'yeast', unit: 'г', cost_per_unit: '24.78', attenuation: '81', brand: 'Fermentis', notes: 'Немецкий вайцен. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
+  { name: 'Safale BE-256', type: 'yeast', unit: 'г', cost_per_unit: '34.78', attenuation: '81', brand: 'Fermentis', notes: 'Бельгийский Аббатский. 15-30°C', ferment_temp_min: '15', ferment_temp_max: '30', ferment_days_typical: '10' },
+  { name: 'Saflager W-34/70', type: 'yeast', unit: 'г', cost_per_unit: '34.78', attenuation: '82', brand: 'Fermentis', notes: 'Классический лагер Weihenstephan. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
+  { name: 'Saflager S-189', type: 'yeast', unit: 'г', cost_per_unit: '33.91', attenuation: '80', brand: 'Fermentis', notes: 'Швейцарский лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
+  { name: 'Saflager S-23', type: 'yeast', unit: 'г', cost_per_unit: '31.30', attenuation: '82', brand: 'Fermentis', notes: 'Западноевропейский лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
+  { name: 'Saflager E-30', type: 'yeast', unit: 'г', cost_per_unit: '39.13', attenuation: '78', brand: 'Fermentis', notes: 'Тёмный лагер, мюнхенский. 12-18°C', ferment_temp_min: '12', ferment_temp_max: '18', ferment_days_typical: '21' },
+  { name: 'Saflager SH-45', type: 'yeast', unit: 'г', cost_per_unit: '36.52', attenuation: '82', brand: 'Fermentis', notes: 'Пильзнерский лагер. 9-12°C', ferment_temp_min: '9', ferment_temp_max: '12', ferment_days_typical: '21' },
+  { name: 'SafMead Classic', type: 'yeast', unit: 'г', cost_per_unit: '80.00', attenuation: '85', brand: 'Fermentis', notes: 'Для медовухи (5г пакет). 15-30°C', ferment_temp_min: '15', ferment_temp_max: '30', ferment_days_typical: '21' },
+  { name: 'SafCider TF-6', type: 'yeast', unit: 'г', cost_per_unit: '46.00', attenuation: '82', brand: 'Fermentis', notes: 'Сухой сидр (5г пакет). 18-24°C', ferment_temp_min: '18', ferment_temp_max: '24', ferment_days_typical: '10' },
+  { name: 'SafCider AB-1', type: 'yeast', unit: 'г', cost_per_unit: '60.00', attenuation: '80', brand: 'Fermentis', notes: 'Полусухой сидр (5г пакет). 18-24°C', ferment_temp_min: '18', ferment_temp_max: '24', ferment_days_typical: '10' },
+  { name: 'SafSpirit HG-1', type: 'yeast', unit: 'г', cost_per_unit: '3.15', attenuation: '92', brand: 'Fermentis', notes: 'Высокоградусная брага (500г пакет). 25-35°C', ferment_temp_min: '25', ferment_temp_max: '35', ferment_days_typical: '7' },
 ];
 
 // ─── ZIP service (zip24.ru) — цены март 2026 ─────────────────────────────────
@@ -214,15 +214,16 @@ const CATALOG_ZIP = [
   { name: 'Columbus (США)', type: 'hop', unit: 'г', cost_per_unit: '3.50', alpha_acid: '15.0', brand: 'USA', notes: 'Земля, смола, пряности' },
 
   // ── Дрожжи ────────────────────────────────────────────────────────────
-  { name: 'Fermentis US-05 (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '270', attenuation: '81', brand: 'Fermentis', notes: 'Американский эль. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
-  { name: 'Fermentis S-04 (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '260', attenuation: '75', brand: 'Fermentis', notes: 'Английский эль. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
-  { name: 'Fermentis W-34/70 (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '410', attenuation: '82', brand: 'Fermentis', notes: 'Классический лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
-  { name: 'Fermentis K-97 (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '290', attenuation: '81', brand: 'Fermentis', notes: 'Немецкий вайцен. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
-  { name: 'Lallemand Nottingham (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '290', attenuation: '80', brand: 'Lallemand', notes: 'Английский эль. 14-21°C', ferment_temp_min: '14', ferment_temp_max: '21', ferment_days_typical: '14' },
-  { name: 'Lallemand London ESB (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '290', attenuation: '71', brand: 'Lallemand', notes: 'Лондонский эль, фруктовый. 17-22°C', ferment_temp_min: '17', ferment_temp_max: '22', ferment_days_typical: '14' },
-  { name: 'Lallemand Munich Classic (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '290', attenuation: '74', brand: 'Lallemand', notes: 'Баварский вайцен. 18-22°C', ferment_temp_min: '18', ferment_temp_max: '22', ferment_days_typical: '10' },
-  { name: 'Lallemand Abbaye (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '320', attenuation: '82', brand: 'Lallemand', notes: 'Бельгийский, фруктово-пряный. 15-25°C', ferment_temp_min: '15', ferment_temp_max: '25', ferment_days_typical: '10' },
-  { name: 'Lallemand Philly Sour (ZIP)', type: 'yeast', unit: 'шт', cost_per_unit: '380', attenuation: '80', brand: 'Lallemand', notes: 'Кислое пиво без бактерий. 20-25°C', ferment_temp_min: '20', ferment_temp_max: '25', ferment_days_typical: '7' },
+  // ── Дрожжи (zip24.ru, цена за грамм; пакеты 11.5г Fermentis, 11г Lallemand) ──
+  { name: 'Fermentis US-05 (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '23.48', attenuation: '81', brand: 'Fermentis', notes: 'Американский эль. 18-28°C', ferment_temp_min: '18', ferment_temp_max: '28', ferment_days_typical: '14' },
+  { name: 'Fermentis S-04 (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '22.61', attenuation: '75', brand: 'Fermentis', notes: 'Английский эль. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
+  { name: 'Fermentis W-34/70 (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '35.65', attenuation: '82', brand: 'Fermentis', notes: 'Классический лагер. 9-15°C', ferment_temp_min: '9', ferment_temp_max: '15', ferment_days_typical: '21' },
+  { name: 'Fermentis K-97 (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '25.22', attenuation: '81', brand: 'Fermentis', notes: 'Немецкий вайцен. 15-24°C', ferment_temp_min: '15', ferment_temp_max: '24', ferment_days_typical: '14' },
+  { name: 'Lallemand Nottingham (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '26.36', attenuation: '80', brand: 'Lallemand', notes: 'Английский эль. 14-21°C', ferment_temp_min: '14', ferment_temp_max: '21', ferment_days_typical: '14' },
+  { name: 'Lallemand London ESB (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '26.36', attenuation: '71', brand: 'Lallemand', notes: 'Лондонский эль, фруктовый. 17-22°C', ferment_temp_min: '17', ferment_temp_max: '22', ferment_days_typical: '14' },
+  { name: 'Lallemand Munich Classic (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '26.36', attenuation: '74', brand: 'Lallemand', notes: 'Баварский вайцен. 18-22°C', ferment_temp_min: '18', ferment_temp_max: '22', ferment_days_typical: '10' },
+  { name: 'Lallemand Abbaye (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '29.09', attenuation: '82', brand: 'Lallemand', notes: 'Бельгийский, фруктово-пряный. 15-25°C', ferment_temp_min: '15', ferment_temp_max: '25', ferment_days_typical: '10' },
+  { name: 'Lallemand Philly Sour (ZIP)', type: 'yeast', unit: 'г', cost_per_unit: '34.55', attenuation: '80', brand: 'Lallemand', notes: 'Кислое пиво без бактерий. 20-25°C', ferment_temp_min: '20', ferment_temp_max: '25', ferment_days_typical: '7' },
 ];
 
 // ─── Ensure at least one default beer profile exists ─────────────────────────
