@@ -4,7 +4,7 @@ import { showToast, showLoading, showError, pageHeader, showModal, closeModal } 
 import t from '../i18n.js';
 import { SPREADSHEET_ID } from '../config.js';
 import { escHtml } from '../utils.js';
-import { loadCatalog, SUPPORTED_COUNTRIES, getCatalogCount } from '../catalog.js';
+import { loadCatalog, CATALOG_SOURCES, getCatalogCount } from '../catalog.js';
 import { THEMES, getTheme, applyTheme } from '../theme.js';
 
 export async function renderSettings(container) {
@@ -139,30 +139,32 @@ export async function renderSettings(container) {
 
     // Load catalog
     container.querySelector('#btn-load-catalog')?.addEventListener('click', () => {
-      const countryOpts = SUPPORTED_COUNTRIES.map(c =>
-        `<option value="${escHtml(c.code)}">${escHtml(c.label)}</option>`
-      ).join('');
-      showModal('Загрузить стандартный каталог', `
-        <div class="form-grid">
-          <div class="form-field">
-            <label class="form-label">Страна / рынок</label>
-            <select class="form-control" id="catalog-country">${countryOpts}</select>
+      const sourceCards = CATALOG_SOURCES.map(s => `
+        <label class="catalog-source-card" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px;transition:border-color .15s">
+          <input type="radio" name="catalog-source" value="${escHtml(s.id)}" style="margin-top:3px;flex-shrink:0"
+            ${s.id === 'standard' ? 'checked' : ''}>
+          <div>
+            <div style="font-weight:600;font-size:13px">${escHtml(s.label)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escHtml(s.desc)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${getCatalogCount(s.id)} позиций</div>
           </div>
-          <p class="form-hint">
-            Будут добавлены популярные ингредиенты для пивоварения и дистилляции
-            со справочными ценами для выбранного рынка.<br>
-            Уже существующие компоненты (по названию) пропускаются.
-          </p>
+        </label>
+      `).join('');
+
+      showModal('Загрузить каталог ингредиентов', `
+        <div style="margin-bottom:6px;font-size:12px;color:var(--text-muted)">
+          Уже существующие компоненты (по названию) пропускаются.
         </div>
+        ${sourceCards}
       `, [
         { label: 'Отмена', class: 'btn-secondary', action: 'cancel', onClick: closeModal },
         { label: 'Загрузить', class: 'btn-primary', action: 'save', onClick: async (overlay) => {
-          const country = overlay.querySelector('#catalog-country').value;
+          const source = overlay.querySelector('input[name="catalog-source"]:checked')?.value || 'standard';
           const btn = overlay.querySelector('[data-action=save]');
           btn.disabled = true;
           btn.textContent = 'Загружаю...';
           try {
-            const { added, skipped } = await loadCatalog(country);
+            const { added, skipped } = await loadCatalog(source);
             closeModal();
             if (added > 0) {
               showToast(`Добавлено ${added} компонентов${skipped ? `, пропущено ${skipped} (уже существуют)` : ''}`);
