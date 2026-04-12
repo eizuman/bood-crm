@@ -913,10 +913,11 @@ body.modal-open { overflow: hidden; }
   flex-wrap: nowrap;
   min-width: 0;
 }
-/* Ingredient component dropdown — grows to fill available row space */
+/* Ingredient component dropdown — fixed max-width so it never inflates when other row items are absent */
 .ing-select-fixed {
   flex: 1 1 0;
   min-width: 0;
+  max-width: 190px;
   overflow: hidden;
 }
 .mash-rest-row {
