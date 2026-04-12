@@ -86,7 +86,9 @@ function recipeCard(r) {
     <div class="recipe-card" data-id="${r.id}">
       <div class="recipe-card-header">
         <div style="display:flex;gap:12px;align-items:center">
-          ${r.label_image ? `<img src="${r.label_image}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">` : ''}
+          ${r.label_image
+            ? `<img src="${r.label_image}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display='none'">`
+            : `<div style="width:48px;height:48px;border-radius:6px;background:var(--bg-tertiary);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:1.2em;flex-shrink:0">📷</div>`}
           <div>
             <h3 class="recipe-name">${escHtml(r.name)}</h3>
             <span class="recipe-style text-muted">${escHtml(r.style || '')}</span>
@@ -1161,13 +1163,12 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <input type="hidden" name="ibu_estimated" value="${escHtml(data.ibu_estimated||'')}">
           <input type="hidden" name="ebc_estimated" value="${escHtml(data.ebc_estimated||'')}">
 
-          <!-- OG / SG-toggle / FG / Упаковка / Труд — CSS Grid -->
+          <!-- OG / SG-toggle / FG / Упаковка — CSS Grid -->
           <div class="og-fg-grid">
             <label class="form-label">OG${unit==='brix'&&ogSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${ogSgVal}</span>`:''}</label>
             <span></span>
             <label class="form-label">FG${unit==='brix'&&fgSgVal?` <span class="text-muted" style="font-weight:400;font-size:0.78em">≈${fgSgVal}</span>`:''}</label>
             <label class="form-label">Упаковка (л) <span style="color:var(--accent);font-size:0.78em">●</span></label>
-            <label class="form-label">Труд (ч)</label>
             <input type="number" name="og_target" class="form-control" value="${escHtml(String(ogDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.050':'12.4'}" data-unit="${unit}">
             <div class="og-unit-toggle">
               <button type="button" class="btn btn-unit-sg" style="flex:1;font-size:0.8em;font-weight:600;border-radius:4px 0 0 4px;background:${unit==='sg'?'var(--accent)':'var(--bg-secondary)'};color:${unit==='sg'?'#fff':'var(--text-muted)'};border:1px solid var(--border);cursor:pointer;padding:0 6px">SG</button>
@@ -1175,7 +1176,11 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             </div>
             <input type="number" name="fg_target" class="form-control" value="${escHtml(String(fgDisp))}" step="${unit==='sg'?'0.001':'0.1'}" placeholder="${unit==='sg'?'1.010':'2.6'}" data-unit="${unit}">
             <input type="number" name="packaged_l" class="form-control" id="vol-packaged" value="${escHtml(data.packaged_l||'')}" step="0.5" placeholder="19">
-            <input type="number" name="labor_hours" class="form-control" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="4">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <label class="form-label" style="margin:0;white-space:nowrap">Труд (ч)</label>
+            <input type="number" name="labor_hours" class="form-control" value="${escHtml(data.labor_hours||'')}" step="0.5" min="0" placeholder="0" style="width:80px">
+            <span class="text-muted" style="font-size:11px">${parseFloat(data.labor_hours||0) > 0 ? `= ${formatCurrency(parseFloat(data.labor_hours) * parseFloat(settings.labor_rate_hour||300), settings.currency)}` : `ставка ${formatCurrency(settings.labor_rate_hour||300, settings.currency)}/ч`}</span>
           </div>
           <input type="hidden" name="batch_size_l" id="vol-batch" value="${escHtml(data.batch_size_l||'')}">
 
