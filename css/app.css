@@ -355,6 +355,9 @@ button { cursor: pointer; font-family: inherit; }
 }
 .data-table tbody tr:hover { background: var(--bg-hover); }
 .data-table tbody tr:last-child td { border-bottom: none; }
+.th-sortable { cursor: pointer; user-select: none; }
+.th-sortable:hover { color: var(--text-primary); }
+.th-sort-active { color: var(--accent-amber) !important; }
 
 /* ── Chips ─────────────────────────────────────────────────────────────────── */
 .chip {
@@ -1107,6 +1110,7 @@ body.modal-open { overflow: hidden; }
   .no-print { display: none !important; }
   body { background: #fff; color: #000; }
   /* Hide page content, show only modal */
+  #app { min-height: 0 !important; }
   .main-content { display: none !important; }
   /* Flatten modal chrome so only content prints */
   .modal-overlay { position: static !important; padding: 0 !important; background: none !important; display: block !important; opacity: 1 !important; }

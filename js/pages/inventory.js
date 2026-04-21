@@ -54,12 +54,6 @@ function _render(container) {
     if (qty <= 0) return false;
     if (activeTypeFilter !== 'all' && c.type !== activeTypeFilter) return false;
     return true;
-  }).sort((a, b) => {
-    const qa = onHandMap[a.id];
-    const qb = onHandMap[b.id];
-    if (qa < 0 && qb >= 0) return -1;
-    if (qb < 0 && qa >= 0) return 1;
-    return a.name.localeCompare(b.name, 'ru');
   });
 
   // Ledger (newest first)
@@ -92,9 +86,9 @@ function _render(container) {
 
   // Stock table
   const stockCols = [
-    { label: t('name'), render: r => `<strong>${escHtml(r.name)}</strong>` },
-    { label: t('type'), render: r => createTypeChip(r.type) },
-    { label: t('on_hand'), render: r => {
+    { label: t('name'), sortFn: r => r.name, render: r => `<strong>${escHtml(r.name)}</strong>` },
+    { label: t('type'), sortFn: r => t(r.type), render: r => createTypeChip(r.type) },
+    { label: t('on_hand'), sortFn: r => onHandMap[r.id] || 0, render: r => {
       const qty = onHandMap[r.id] || 0;
       const cls = qty < 0 ? 'text-danger' : '';
       return `<strong class="${cls}">${qty.toLocaleString('ru-RU', { maximumFractionDigits: 3 })} ${escHtml(r.unit || '')}</strong>`;
@@ -114,6 +108,7 @@ function _render(container) {
     emptyMessage: activeTypeFilter === 'all'
       ? 'На складе ничего нет. Добавьте закупку.'
       : `Нет товаров типа "${TYPE_TABS.find(t => t.id === activeTypeFilter)?.label}" на складе.`,
+    defaultSortCol: 0,
   });
 
   // Ledger table
@@ -186,6 +181,13 @@ function _render(container) {
 function showPurchaseForm(pageContainer) {
   const activeComponents = components.filter(c => c.is_active !== 'FALSE');
 
+  const COMP_TYPES = [
+    'malt','hop','yeast','additive','salt','packaging','equipment',
+    'grain_distill','sugar','fruit','finished_beer','finished_spirit','other',
+  ];
+  const typeOpts = COMP_TYPES.map(v => ({ value: v, label: t(v) }));
+  const unitOpts = ['кг','г','л','мл','шт','пач','уп','м','другое'].map(v => ({ value: v, label: v }));
+
   // Group by type for the select
   const grouped = {};
   activeComponents.forEach(c => {
@@ -193,12 +195,66 @@ function showPurchaseForm(pageContainer) {
     grouped[c.type].push(c);
   });
 
-  const optionsHtml = `<option value="">— выбрать компонент —</option>` +
+  const optionsHtml =
+    `<option value="">— выбрать компонент —</option>` +
+    `<option value="__new__">✚ Создать новый компонент</option>` +
     Object.entries(grouped).map(([type, comps]) =>
       `<optgroup label="${escHtml(t(type))}">
         ${comps.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
       </optgroup>`
     ).join('');
+
+  // Editable new-component fields (prefixed nc_)
+  function newCompDynamic(type) {
+    if (['malt','grain_distill'].includes(type)) return `
+      <div class="form-row-2">
+        <div class="form-field"><label class="form-label">EBC</label>${numberInput('nc_ebc', '')}</div>
+        <div class="form-field"><label class="form-label">Экстрактивность %</label>${numberInput('nc_attenuation', '')}</div>
+      </div>`;
+    if (type === 'hop') return `
+      <div class="form-field"><label class="form-label">${t('alpha_acid')}</label>${numberInput('nc_alpha_acid', '')}</div>`;
+    if (type === 'yeast') return `
+      <div class="form-field"><label class="form-label">${t('attenuation')}</label>${numberInput('nc_attenuation', '')}</div>`;
+    return '';
+  }
+
+  // Read-only existing-component characteristic fields (no name → not collected)
+  function existingCompFields(comp) {
+    const type = comp.type;
+    if (['malt','grain_distill'].includes(type)) return `
+      <div class="form-row-2">
+        <div class="form-field"><label class="form-label" style="color:var(--text-muted)">EBC</label>
+          <input type="number" class="form-control" value="${escHtml(String(comp.ebc||''))}" disabled></div>
+        <div class="form-field"><label class="form-label" style="color:var(--text-muted)">Экстрактивность %</label>
+          <input type="number" class="form-control" value="${escHtml(String(comp.attenuation||''))}" disabled></div>
+      </div>`;
+    if (type === 'hop') return `
+      <div class="form-field"><label class="form-label" style="color:var(--text-muted)">${t('alpha_acid')}</label>
+        <input type="number" class="form-control" value="${escHtml(String(comp.alpha_acid||''))}" disabled></div>`;
+    if (type === 'yeast') return `
+      <div class="form-field"><label class="form-label" style="color:var(--text-muted)">${t('attenuation')}</label>
+        <input type="number" class="form-control" value="${escHtml(String(comp.attenuation||''))}" disabled></div>`;
+    return '';
+  }
+
+  function renderDetails(compId) {
+    if (!compId) return '';
+    if (compId === '__new__') return `
+      <div id="new-comp-panel" style="border-left:3px solid var(--accent-amber);padding-left:12px;margin-bottom:4px">
+        ${formField('Название <span class="text-danger">*</span>', textInput('nc_name', ''))}
+        ${formField('Производитель / Бренд', textInput('nc_brand', ''))}
+        <div class="form-row-2">
+          <div class="form-field"><label class="form-label">Тип <span class="text-danger">*</span></label>${selectInput('nc_type', typeOpts, 'malt')}</div>
+          <div class="form-field"><label class="form-label">Единица <span class="text-danger">*</span></label>${selectInput('nc_unit', unitOpts, 'кг')}</div>
+        </div>
+        ${formField('Ориент. цена за ед.', numberInput('nc_cost_per_unit', ''))}
+        <div id="nc-dynamic-fields">${newCompDynamic('malt')}</div>
+      </div>`;
+    const comp = components.find(c => c.id === compId);
+    if (!comp) return '';
+    const fields = existingCompFields(comp);
+    return fields ? `<div style="margin-bottom:4px">${fields}</div>` : '';
+  }
 
   const html = `
     <form id="purchase-form" class="form-grid">
@@ -206,6 +262,7 @@ function showPurchaseForm(pageContainer) {
         <label class="form-label">Компонент <span class="text-danger">*</span></label>
         <select name="component_id" class="form-control" id="purchase-component">${optionsHtml}</select>
       </div>
+      <div id="comp-details"></div>
       <div class="form-row-2">
         <div class="form-field">
           <label class="form-label">Количество <span class="text-danger">*</span> <span id="qty-unit" style="color:var(--text-muted);font-weight:400"></span></label>
@@ -233,7 +290,10 @@ function showPurchaseForm(pageContainer) {
     { label: 'Закупить', class: 'btn-primary', action: 'save', onClick: async (overlay) => {
       const form = overlay.querySelector('#purchase-form');
       const data = collectForm(form);
+      const isNew = data.component_id === '__new__';
+
       if (!data.component_id) { showToast('Выберите компонент', 'warning'); return; }
+      if (isNew && !data.nc_name?.trim()) { showToast('Введите название компонента', 'warning'); return; }
       if (!data.qty || parseFloat(data.qty) <= 0) { showToast('Укажите количество', 'warning'); return; }
       if (!data.total_paid || parseFloat(data.total_paid) < 0) { showToast('Укажите сумму за покупку', 'warning'); return; }
 
@@ -242,7 +302,33 @@ function showPurchaseForm(pageContainer) {
       const unitCost = qty > 0 ? totalPaid / qty : 0;
 
       try {
-        const comp = components.find(c => c.id === data.component_id);
+        let componentId = data.component_id;
+        let comp = components.find(c => c.id === componentId);
+
+        if (isNew) {
+          const ts = now();
+          componentId = genId();
+          const newComp = {
+            id: componentId,
+            name: data.nc_name.trim(),
+            brand: data.nc_brand || '',
+            type: data.nc_type || 'other',
+            unit: data.nc_unit || 'кг',
+            cost_per_unit: data.nc_cost_per_unit || '',
+            ebc: data.nc_ebc || '',
+            alpha_acid: data.nc_alpha_acid || '',
+            attenuation: data.nc_attenuation || '',
+            spirit_type: '',
+            notes: '',
+            is_active: 'TRUE',
+            created_at: ts,
+            updated_at: ts,
+          };
+          await appendRow('Components', newComp);
+          components.push(newComp);
+          comp = newComp;
+        }
+
         const ts = now();
         const inventoryId = genId();
         const moneyId = genId();
@@ -250,7 +336,7 @@ function showPurchaseForm(pageContainer) {
 
         await appendRow('Inventory', {
           id: inventoryId,
-          component_id: data.component_id,
+          component_id: componentId,
           qty_delta: String(qty),
           movement_type: 'purchase',
           ref_type: 'purchase',
@@ -279,10 +365,14 @@ function showPurchaseForm(pageContainer) {
     }},
   ]);
 
-  function recalc() {
+  function getUnit() {
     const compId = overlay.querySelector('#purchase-component')?.value;
-    const comp = components.find(c => c.id === compId);
-    const unit = comp?.unit || '';
+    if (compId === '__new__') return overlay.querySelector('[name=nc_unit]')?.value || '';
+    return components.find(c => c.id === compId)?.unit || '';
+  }
+
+  function recalc() {
+    const unit = getUnit();
     const qty = parseFloat(overlay.querySelector('[name=qty]')?.value) || 0;
     const total = parseFloat(overlay.querySelector('[name=total_paid]')?.value) || 0;
 
@@ -302,7 +392,21 @@ function showPurchaseForm(pageContainer) {
     }
   }
 
-  overlay.querySelector('#purchase-component')?.addEventListener('change', recalc);
+  function updateDetails(compId) {
+    const el = overlay.querySelector('#comp-details');
+    if (!el) return;
+    el.innerHTML = renderDetails(compId);
+    if (compId === '__new__') {
+      el.querySelector('[name=nc_type]')?.addEventListener('change', (e) => {
+        const df = el.querySelector('#nc-dynamic-fields');
+        if (df) df.innerHTML = newCompDynamic(e.target.value);
+      });
+      el.querySelector('[name=nc_unit]')?.addEventListener('change', recalc);
+    }
+    recalc();
+  }
+
+  overlay.querySelector('#purchase-component')?.addEventListener('change', (e) => updateDetails(e.target.value));
   overlay.querySelector('[name=qty]')?.addEventListener('input', recalc);
   overlay.querySelector('[name=total_paid]')?.addEventListener('input', recalc);
 }

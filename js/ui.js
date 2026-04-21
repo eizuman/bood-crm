@@ -145,6 +145,14 @@ export function renderTabs(container, tabs, activeTab, onChange) {
 }
 
 // ─── Table ────────────────────────────────────────────────────────────────────
+function _cmpNames(a, b) {
+  const s = v => String(v ?? '');
+  const isRu = v => /^[а-яёА-ЯЁ]/i.test(s(v));
+  const aRu = isRu(a), bRu = isRu(b);
+  if (aRu !== bRu) return aRu ? -1 : 1;
+  return s(a).localeCompare(s(b), aRu ? 'ru' : 'en', { sensitivity: 'base' });
+}
+
 export function renderTable(container, columns, rows, options = {}) {
   if (typeof container === 'string') container = document.querySelector(container);
   if (!container) return;
@@ -154,34 +162,75 @@ export function renderTable(container, columns, rows, options = {}) {
     return;
   }
 
-  container.innerHTML = `
-    <div class="table-wrapper">
-      <table class="data-table">
-        <thead>
-          <tr>${columns.map(c => `<th${c.width ? ` style="width:${c.width}"` : ''}>${escHtml(c.label)}</th>`).join('')}</tr>
-        </thead>
-        <tbody>
-          ${rows.map(row => `
-            <tr class="${options.rowClass?.(row) || ''}" data-id="${escHtml(row.id || '')}">
-              ${columns.map(c => `<td>${c.render ? c.render(row) : escHtml(row[c.key] ?? '')}</td>`).join('')}
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+  // Initialise sort state once per container element
+  if (!container._sort) {
+    container._sort = {
+      col: options.defaultSortCol ?? -1,
+      dir: options.defaultSortDir ?? 1,
+    };
+  }
 
-  if (options.onRowClick) {
-    container.querySelectorAll('tbody tr').forEach(tr => {
-      tr.style.cursor = 'pointer';
-      tr.addEventListener('click', (e) => {
-        if (!e.target.closest('button') && !e.target.closest('a')) {
-          const row = rows.find(r => r.id === tr.dataset.id);
-          if (row) options.onRowClick(row, e);
-        }
-      });
+  function sortedRows() {
+    const { col, dir } = container._sort;
+    if (col < 0) return rows;
+    const getter = columns[col].sortFn || (columns[col].sortKey ? r => r[columns[col].sortKey] : null);
+    if (!getter) return rows;
+    return [...rows].sort((a, b) => {
+      const av = getter(a), bv = getter(b);
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return _cmpNames(av, bv) * dir;
     });
   }
+
+  function paint() {
+    const { col, dir } = container._sort;
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>${columns.map((c, i) => {
+              const sortable = c.sortFn || c.sortKey;
+              const active   = sortable && i === col;
+              const arrow    = active ? (dir === 1 ? ' ↑' : ' ↓') : '';
+              const cls      = sortable ? ' class="th-sortable' + (active ? ' th-sort-active' : '') + '"' : '';
+              return `<th${cls}${c.width ? ` style="width:${c.width}"` : ''} data-col="${i}">${escHtml(c.label)}${arrow}</th>`;
+            }).join('')}</tr>
+          </thead>
+          <tbody>
+            ${sortedRows().map(row => `
+              <tr class="${options.rowClass?.(row) || ''}" data-id="${escHtml(row.id || '')}">
+                ${columns.map(c => `<td>${c.render ? c.render(row) : escHtml(row[c.key] ?? '')}</td>`).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    container.querySelectorAll('th.th-sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const idx = parseInt(th.dataset.col);
+        container._sort = container._sort.col === idx
+          ? { col: idx, dir: container._sort.dir * -1 }
+          : { col: idx, dir: 1 };
+        paint();
+      });
+    });
+
+    if (options.onRowClick) {
+      container.querySelectorAll('tbody tr').forEach(tr => {
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', (e) => {
+          if (!e.target.closest('button') && !e.target.closest('a')) {
+            const row = rows.find(r => r.id === tr.dataset.id);
+            if (row) options.onRowClick(row, e);
+          }
+        });
+      });
+    }
+  }
+
+  paint();
 }
 
 // ─── Chips ────────────────────────────────────────────────────────────────────

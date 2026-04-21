@@ -203,7 +203,7 @@ function showRecipeEditor(recipe, pageContainer) {
     tabContent.querySelectorAll('[name]').forEach(el => {
       el.addEventListener('change', () => {
         // OG/FG: convert Brix → SG when in Brix mode
-        const ogfgUnit = recipeData._ogfgUnit || el.dataset.unit || 'sg';
+        const ogfgUnit = recipeData._ogfgUnit || el.dataset.unit || 'brix';
         if (el.name === 'og_target' && ogfgUnit === 'brix' && el.value) {
           recipeData.og_target = String(brixToSg(parseFloat(el.value)));
         } else if (el.name === 'fg_target' && ogfgUnit === 'brix' && el.value) {
@@ -583,7 +583,7 @@ function showRecipeEditor(recipe, pageContainer) {
 
     // ── Shared OG/FG unit toggle ───────────────────────────────────────────────
     tabContent.querySelector('.btn-unit-sg')?.addEventListener('click', () => {
-      if ((recipeData._ogfgUnit || 'sg') === 'brix') {
+      if ((recipeData._ogfgUnit || 'brix') === 'brix') {
         const ogEl = tabContent.querySelector('[name=og_target]');
         const fgEl = tabContent.querySelector('[name=fg_target]');
         if (ogEl?.value) recipeData.og_target = String(brixToSg(parseFloat(ogEl.value)));
@@ -811,7 +811,7 @@ function showRecipeEditor(recipe, pageContainer) {
     // water_additions is managed separately via recipeData directly — don't overwrite
     overlay.querySelectorAll('[name]').forEach(el => {
       if (el.name === 'water_additions') return; // managed via recipeData
-      const saveUnit = recipeData._ogfgUnit || el.dataset.unit || 'sg';
+      const saveUnit = recipeData._ogfgUnit || el.dataset.unit || 'brix';
       if (el.name === 'og_target' && saveUnit === 'brix' && el.value) {
         recipeData.og_target = String(brixToSg(parseFloat(el.value)));
       } else if (el.name === 'fg_target' && saveUnit === 'brix' && el.value) {
@@ -1006,7 +1006,7 @@ function renderMashBlocks(rests) {
 
 // ─── Beer Grid Layout (desktop: 3 columns) ───────────────────────────────────
 function renderBeerGrid(container, data, ingredients, mashRests) {
-  const unit     = data._ogfgUnit || 'sg';   // shared OG/FG unit
+  const unit     = data._ogfgUnit || 'brix';   // shared OG/FG unit
   const ogSgVal  = data.og_target || '';
   const fgSgVal  = data.fg_target || '';
   const ogDisp   = unit === 'sg' ? ogSgVal : (ogSgVal ? String(sgToBrix(parseFloat(ogSgVal))) : '');
@@ -1374,7 +1374,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">
             <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:5px">Вирпул</div>
             <div class="form-row-2" style="margin-bottom:4px">
-              ${formField('Темп. вирпула (°C)', `<input type="number" name="whirlpool_temp_c" class="form-control" value="${escHtml(data.whirlpool_temp_c||'85')}" step="1">`)}
+              ${formField('Темп. вирпула (°C)', `<input type="number" name="whirlpool_temp_c" class="form-control" value="${escHtml(data.whirlpool_temp_c||'80')}" step="1">`)}
               ${formField('Время вирпула (мин)', `<input type="number" name="whirlpool_time_min" class="form-control" value="${escHtml(data.whirlpool_time_min||'20')}" step="5">`)}
             </div>
             ${renderHopRows(whirlpool, 'whirlpool', data.whirlpool_time_min, og, batchVol, true)}
@@ -1445,8 +1445,8 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
 // ─── (legacy stub kept for spirit tab) ───────────────────────────────────────
 function renderBeerTab(container, tab, data, ingredients, mashRests) {
   if (tab === 'overview') {
-    const ogUnit = data._og_unit || 'sg';
-    const fgUnit = data._fg_unit || 'sg';
+    const ogUnit = data._og_unit || 'brix';
+    const fgUnit = data._fg_unit || 'brix';
     const ogSgVal = data.og_target || '';
     const fgSgVal = data.fg_target || '';
     const ogDisplayVal = ogUnit === 'sg' ? ogSgVal : (ogSgVal ? String(sgToBrix(parseFloat(ogSgVal))) : '');
@@ -1717,9 +1717,10 @@ function renderMashRests(rests) {
 
 function renderIngredientList(items, stageKey, allowedTypes = []) {
   if (!items.length) return '<p class="text-muted">Нет ингредиентов</p>';
-  const filteredComponents = allowedTypes.length
+  const filteredComponents = (allowedTypes.length
     ? components.filter(c => allowedTypes.includes(c.type) && c.is_active !== 'FALSE')
-    : components.filter(c => c.is_active !== 'FALSE');
+    : components.filter(c => c.is_active !== 'FALSE')
+  ).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
   return items.map((ing, i) => {
     const comp = components.find(c => c.id === ing.component_id);

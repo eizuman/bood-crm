@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:zip24.ru)",
+      "WebFetch(domain:malt.ru)",
+      "Bash(git add *)"
+    ]
+  }
+}

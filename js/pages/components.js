@@ -66,14 +66,14 @@ function _render(container) {
   });
 
   const columns = [
-    { label: t('name'), key: 'name', render: r => `
+    { label: t('name'), key: 'name', sortFn: r => r.name, render: r => `
       <strong>${escHtml(r.name)}</strong>
       ${r.brand ? `<br><span class="text-muted text-sm">${escHtml(r.brand)}</span>` : ''}
     `},
-    { label: t('type'), key: 'type', render: r => createTypeChip(r.type) },
-    { label: t('unit'), key: 'unit' },
-    { label: t('cost_per_unit'), key: 'cost_per_unit', render: r => r.cost_per_unit ? `${parseFloat(r.cost_per_unit).toLocaleString('ru-RU')} ₽` : '—' },
-    { label: t('on_hand'), key: 'on_hand', render: r => {
+    { label: t('type'), key: 'type', sortFn: r => t(r.type), render: r => createTypeChip(r.type) },
+    { label: t('unit'), key: 'unit', sortKey: 'unit' },
+    { label: t('cost_per_unit'), key: 'cost_per_unit', sortFn: r => parseFloat(r.cost_per_unit) || 0, render: r => r.cost_per_unit ? `${parseFloat(r.cost_per_unit).toLocaleString('ru-RU')} ₽` : '—' },
+    { label: t('on_hand'), sortFn: r => calcOnHand(inventoryCache, r.id), render: r => {
       const qty = calcOnHand(inventoryCache, r.id);
       return `<span class="${qty < 0 ? 'text-danger' : qty === 0 ? 'text-muted' : 'text-success'}">${qty.toLocaleString('ru-RU', {maximumFractionDigits:2})} ${r.unit}</span>`;
     }},
@@ -86,6 +86,7 @@ function _render(container) {
 
   renderTable(container.querySelector('#table-container'), columns, filtered, {
     emptyMessage: t('no_data'),
+    defaultSortCol: 0,
   });
 
   // Events

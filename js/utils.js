@@ -204,11 +204,11 @@ export function generateBeerSteps(recipe, ingredients, mashRests, saltData = [])
   if (mashRests.length) {
     const first = mashRests[0];
     const phHint = recipe.ph_target ? `, pH ${recipe.ph_target}` : '';
-    add(`Нагреть затор: ${waterMash} л до ${parseFloat(first.temp_c) + 2}°C${phHint}`);
+    add(`Нагреть воду: ${waterMash} л до ${parseFloat(first.temp_c) + 2}°C${phHint}`);
     mashSalts.forEach(s => sub(`${s.name}: ${s.mashG} г`));
   } else if (waterMash) {
     const phHint = recipe.ph_target ? `, pH ${recipe.ph_target}` : '';
-    add(`Нагреть затор: ${waterMash} л${phHint}`);
+    add(`Нагреть воду: ${waterMash} л${phHint}`);
     mashSalts.forEach(s => sub(`${s.name}: ${s.mashG} г`));
   }
 
