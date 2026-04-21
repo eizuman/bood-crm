@@ -793,13 +793,44 @@ function showRecipeEditor(recipe, pageContainer) {
       });
     });
 
-    // Water volume change → refresh salt splits (ion refresh handled by updateWaterChain)
-    ['[name=water_mash_l]','[name=water_sparge_l]'].forEach(sel => {
-      tabContent.querySelector(sel)?.addEventListener('input', () => {
-        refreshSaltSplits();
-        refreshIonDisplay();
-      });
-    });
+    // Manual mash/sparge override → keep preboil fixed, rebalance the other field
+    function rebalanceWater(changed) {
+      const mashEl   = tabContent.querySelector('[name=water_mash_l]');
+      const spargeEl = tabContent.querySelector('[name=water_sparge_l]');
+      const totalEl  = tabContent.querySelector('[name=water_total_l]');
+      const hmEl     = tabContent.querySelector('[name=hydromodule]');
+
+      const preboil = parseFloat(totalEl?.value) || 0;
+      if (!preboil) { refreshSaltSplits(); refreshIonDisplay(); return; }
+
+      const grainKg = recipeIngredients
+        .filter(i => i.stage_key === 'mash')
+        .reduce((s, i) => s + (parseFloat(i.qty) || 0), 0) / 1000;
+
+      const selProfId = tabContent.querySelector('[name=equipment_profile_id]')?.value || recipeData.equipment_profile_id;
+      const sp = equipmentProfiles.find(p => p.id === selProfId);
+      const grainAbs = parseFloat(sp?.grain_absorption || settings.grain_absorption || 1.0);
+
+      if (changed === 'mash') {
+        const newMash   = parseFloat(mashEl?.value) || 0;
+        const newSparge = +(preboil - newMash + grainKg * grainAbs).toFixed(2);
+        if (newSparge >= 0 && spargeEl) { spargeEl.value = String(newSparge); recipeData.water_sparge_l = String(newSparge); }
+        recipeData.water_mash_l = String(newMash);
+        if (grainKg > 0 && hmEl) { const hm = +(newMash / grainKg).toFixed(2); hmEl.value = String(hm); recipeData.hydromodule = String(hm); }
+      } else {
+        const newSparge = parseFloat(spargeEl?.value) || 0;
+        const newMash   = +(preboil - newSparge + grainKg * grainAbs).toFixed(2);
+        if (newMash >= 0 && mashEl) { mashEl.value = String(newMash); recipeData.water_mash_l = String(newMash); }
+        recipeData.water_sparge_l = String(newSparge);
+        if (grainKg > 0 && hmEl) { const hm = +(newMash / grainKg).toFixed(2); hmEl.value = String(hm); recipeData.hydromodule = String(hm); }
+      }
+
+      refreshSaltSplits();
+      refreshIonDisplay();
+    }
+
+    tabContent.querySelector('[name=water_mash_l]')?.addEventListener('input', () => rebalanceWater('mash'));
+    tabContent.querySelector('[name=water_sparge_l]')?.addEventListener('input', () => rebalanceWater('sparge'));
   }
 
   async function saveRecipe() {
