@@ -1027,6 +1027,68 @@ body.modal-open { overflow: hidden; }
 .badge-success { color: var(--success); font-size: 12px; font-weight: 500; }
 .badge-muted   { color: var(--text-muted); font-size: 12px; }
 
+/* ── KPI info button & breakdown modal ────────────────────────────────────── */
+.kpi-info-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 0 0 4px;
+  vertical-align: middle;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s;
+  line-height: 1;
+}
+.kpi-info-btn:hover { opacity: 1; color: var(--accent-amber); }
+.bd-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+}
+.bd-lines { min-width: 300px; }
+.bd-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.bd-line:last-child { border-bottom: none; }
+.bd-total {
+  font-weight: 700;
+  padding-top: 10px;
+  border-top: 2px solid var(--border) !important;
+  border-bottom: none !important;
+  margin-top: 2px;
+  font-size: 15px;
+}
+.bd-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 10px 0 4px;
+}
+.inline-info-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 0 0 3px;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s;
+  vertical-align: middle;
+}
+.inline-info-btn:hover { opacity: 1; color: var(--accent-amber); }
+
 /* ── Sales totals bar ──────────────────────────────────────────────────────── */
 .sales-totals-bar {
   display: flex;

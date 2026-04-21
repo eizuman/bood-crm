@@ -385,10 +385,13 @@ export function pageHeader(title, actions = '') {
   `;
 }
 
-export function kpiCard(label, value, sub = '', color = '') {
+export function kpiCard(label, value, sub = '', color = '', breakdownId = '') {
+  const infoBtn = breakdownId
+    ? ` <button class="kpi-info-btn" data-bd="${escHtml(breakdownId)}" title="Расшифровка">ⓘ</button>`
+    : '';
   return `
     <div class="kpi-card">
-      <div class="kpi-label">${escHtml(label)}</div>
+      <div class="kpi-label">${escHtml(label)}${infoBtn}</div>
       <div class="kpi-value" style="${color ? `color:${color}` : ''}">${value}</div>
       ${sub ? `<div class="kpi-sub">${escHtml(sub)}</div>` : ''}
     </div>

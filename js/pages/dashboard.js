@@ -1,8 +1,47 @@
 // Bood CRM — Dashboard Page
 import { getRows, getSettings } from '../sheets.js';
 import { calcOnHand, calcCustomerBalance, calcCOGS, formatCurrency, formatDate, isThisMonth, escHtml } from '../utils.js';
-import { showLoading, showError, pageHeader, kpiCard, createStatusChip, createBatchTypeChip } from '../ui.js';
+import { showLoading, showError, showModal, closeModal, pageHeader, kpiCard, createStatusChip, createBatchTypeChip } from '../ui.js';
 import t from '../i18n.js';
+
+const ML_TYPE_LABELS = {
+  deposit:             'Депозиты клиентов',
+  withdrawal:          'Снятие с баланса',
+  sale_charge:         'Списания за продажи (долг)',
+  equipment_purchase:  'Покупка оборудования',
+  equipment_sale:      'Продажа оборудования',
+  purchase:            'Закупки сырья',
+  ingredient_purchase: 'Закупки ингредиентов',
+  expense:             'Расходы',
+  refund:              'Возврат клиентам',
+};
+
+let _bd = {};
+
+function _mlLabel(type) { return ML_TYPE_LABELS[type] || escHtml(`(${type})`); }
+
+function _bdRow(labelHtml, valueHtml, bold = false) {
+  return `<div class="bd-line${bold ? ' bd-total' : ''}"><span>${labelHtml}</span><span>${valueHtml}</span></div>`;
+}
+
+function _colored(amount, cur, showSign = true) {
+  const sign = showSign && amount > 0 ? '+' : '';
+  const color = amount >= 0 ? 'var(--success)' : 'var(--error)';
+  return `<span style="color:${color}">${sign}${formatCurrency(amount, cur)}</span>`;
+}
+
+function _neutral(amount, cur) {
+  return `<span>${formatCurrency(amount, cur)}</span>`;
+}
+
+function _showBreakdown(key) {
+  const bd = _bd[key];
+  if (!bd) return;
+  showModal(bd.title, `
+    ${bd.note ? `<p class="bd-note">${bd.note}</p>` : ''}
+    <div class="bd-lines">${bd.rows}</div>
+  `, [{ label: 'Закрыть', class: 'btn-secondary', action: 'close', onClick: closeModal }]);
+}
 
 export async function renderDashboard(container) {
   showLoading(container);
@@ -18,9 +57,18 @@ export async function renderDashboard(container) {
       getSettings(),
     ]);
 
+    const cur = settings.currency;
+
     // ── KPI Calculations ──────────────────────────────────────────────────────
     // 1. Hobby Net Cash = SUM(MoneyLedger.amount_signed)
     const hobbyCash = moneyLedger.reduce((s, r) => s + parseFloat(r.amount_signed || 0), 0);
+
+    // ML grouped by movement_type
+    const mlGrouped = {};
+    moneyLedger.forEach(r => {
+      const mt = r.movement_type || 'other';
+      mlGrouped[mt] = (mlGrouped[mt] || 0) + parseFloat(r.amount_signed || 0);
+    });
 
     // 2. Revenue & COGS
     const postedSales = sales.filter(s => s.status === 'posted' && s.sale_type !== 'gift');
@@ -54,37 +102,29 @@ export async function renderDashboard(container) {
     ).length;
 
     // 7. CAPEX & Break-even
-    // Source of truth: Equipment sheet (covers both manual entry and JSON import)
     const activeEquipment = equipment.filter(e => e.is_active !== 'FALSE');
-    const capexInvested = activeEquipment
-      .reduce((s, e) => s + (parseFloat(e.purchase_price) || 0), 0);
+    const capexInvested = activeEquipment.reduce((s, e) => s + (parseFloat(e.purchase_price) || 0), 0);
     const capexRecovered = activeEquipment
       .filter(e => e.sale_price && parseFloat(e.sale_price) > 0)
       .reduce((s, e) => s + (parseFloat(e.sale_price) || 0), 0);
     const netCapex = capexInvested - capexRecovered;
 
-    // First purchase date from Equipment sheet
     const firstEquipDate = activeEquipment
       .map(e => new Date(e.purchase_date || e.created_at))
       .filter(d => !isNaN(d))
       .sort((a, b) => a - b)[0];
 
-    // Operational income = paid sales revenue (best proxy for hobby income)
-    // + deposits from MoneyLedger - ingredient purchase expenses
+    // Operational income: non-equipment ML flow + sales revenue as proxy
     const mlOperational = moneyLedger
       .filter(r => r.movement_type !== 'equipment_purchase' && r.movement_type !== 'equipment_sale')
       .reduce((s, r) => s + parseFloat(r.amount_signed || 0), 0);
-    // Use sales revenue as income if it's larger than MoneyLedger flow
-    // (handles case where historical sales weren't added to MoneyLedger)
     const operationalIncome = Math.max(salesRevenue, mlOperational > 0 ? mlOperational : 0) +
-      Math.min(0, mlOperational); // add any negative operational flows (purchase expenses)
+      Math.min(0, mlOperational);
 
-    // How much of CAPEX is covered by operational income
     const coverageAmount = Math.max(0, operationalIncome);
     const remaining = Math.max(0, netCapex - coverageAmount);
     const coveragePct = netCapex > 0 ? Math.min(100, (coverageAmount / netCapex) * 100) : 100;
 
-    // Project break-even based on avg monthly income since first equipment purchase
     let breakEvenProjection = null;
     if (remaining > 0 && firstEquipDate && coverageAmount > 0) {
       const monthsElapsed = Math.max(1,
@@ -98,6 +138,112 @@ export async function renderDashboard(container) {
       }
     } else if (remaining <= 0 && netCapex > 0) {
       breakEvenProjection = { done: true };
+    }
+
+    // ── Build breakdowns ──────────────────────────────────────────────────────
+    _bd = {};
+
+    // Баланс кассы: ML сгруппировано по типам
+    {
+      const rows = Object.entries(mlGrouped)
+        .sort((a, b) => a[1] - b[1])
+        .map(([type, amt]) => _bdRow(_mlLabel(type), _colored(amt, cur)))
+        .join('') +
+        _bdRow('ИТОГО', _colored(hobbyCash, cur, false), true);
+      _bd['cash'] = {
+        title: 'Баланс кассы — расшифровка',
+        note: 'Сумма всех записей таблицы MoneyLedger по полю amount_signed.',
+        rows,
+      };
+    }
+
+    // Выручка / прибыль
+    {
+      let rows;
+      if (hasCOGS) {
+        rows = [
+          _bdRow('Выручка от продаж', _colored(salesRevenue, cur)),
+          _bdRow(`Себестоимость (COGS, ${batches.filter(b => b.cogs_snapshot).length} партий)`, _colored(-frozenCOGS, cur)),
+          _bdRow('Прибыль', _colored(profit, cur, false), true),
+        ].join('');
+      } else {
+        rows = [
+          _bdRow(`Проведённые продажи (${postedSales.length})`, _colored(salesRevenue, cur)),
+          ...(giftCount > 0 ? [_bdRow(`Подарки (${giftCount}) — не учитываются`, _neutral(0, cur))] : []),
+          _bdRow('ИТОГО', _colored(salesRevenue, cur, false), true),
+        ].join('');
+      }
+      _bd['revenue'] = {
+        title: hasCOGS ? 'Прибыль — расшифровка' : 'Выручка от продаж — расшифровка',
+        rows,
+      };
+    }
+
+    // Капекс
+    {
+      const equipRows = activeEquipment
+        .slice(0, 8)
+        .map(e => _bdRow(
+          escHtml(e.name || '—') + (e.purchase_date ? ` <span class="text-muted" style="font-size:11px">${formatDate(e.purchase_date)}</span>` : ''),
+          `<span>${formatCurrency(parseFloat(e.purchase_price) || 0, cur)}</span>`
+        )).join('');
+      const moreCount = activeEquipment.length - 8;
+      const moreRow = moreCount > 0
+        ? _bdRow(`...ещё ${moreCount} позиций`, _neutral(activeEquipment.slice(8).reduce((s, e) => s + (parseFloat(e.purchase_price) || 0), 0), cur))
+        : '';
+      const rows = equipRows + moreRow +
+        `<div class="bd-line bd-section-header"><span>ИТОГО</span><span></span></div>` +
+        _bdRow(`Куплено (${activeEquipment.length} ед.)`, _neutral(capexInvested, cur)) +
+        (capexRecovered > 0 ? _bdRow('Возвращено (продажи)', _colored(capexRecovered, cur)) : '') +
+        _bdRow('НЕТТО CAPEX', `<span style="color:var(--accent)">${formatCurrency(netCapex, cur)}</span>`, true);
+      _bd['capex'] = {
+        title: 'Капекс — расшифровка',
+        note: 'Данные из таблицы «Оборудование».',
+        rows,
+      };
+    }
+
+    // Покрыто операционным потоком
+    {
+      const mlOpEntries = Object.entries(mlGrouped)
+        .filter(([type]) => type !== 'equipment_purchase' && type !== 'equipment_sale');
+      const mlOpRows = mlOpEntries
+        .sort((a, b) => a[1] - b[1])
+        .map(([type, amt]) => _bdRow(_mlLabel(type), _colored(amt, cur)))
+        .join('');
+
+      const isProxyUsed = mlOperational <= 0;
+      const rows = [
+        `<div class="bd-line bd-section-header"><span>Операционные движения в кассе (без оборудования)</span><span></span></div>`,
+        mlOpRows,
+        _bdRow('Итого в кассе (опер.)', _colored(mlOperational, cur), false),
+        `<div class="bd-line bd-section-header"><span>Формула расчёта</span><span></span></div>`,
+        _bdRow(isProxyUsed ? 'Выручка от продаж (прокси дохода)' : 'Фактический доход из кассы',
+          _colored(isProxyUsed ? salesRevenue : mlOperational, cur)),
+        ...(isProxyUsed ? [_bdRow('Операционные расходы из кассы', _colored(mlOperational, cur))] : []),
+        _bdRow('Покрыто операционным потоком', `<span style="color:var(--success);font-weight:700">${formatCurrency(coverageAmount, cur)}</span>`, true),
+      ].join('');
+
+      _bd['coverage'] = {
+        title: 'Покрыто операционным потоком — расшифровка',
+        note: isProxyUsed
+          ? 'Выручка от продаж используется как прокси дохода хобби, из которого вычитаются прочие операционные расходы из кассы (закупки и т.п.).'
+          : 'Фактический доход из кассы (депозиты минус расходы, без оборудования).',
+        rows,
+      };
+    }
+
+    // Осталось окупить
+    {
+      const rows = [
+        _bdRow('Нетто CAPEX (вложено в оборудование)', _neutral(netCapex, cur)),
+        _bdRow('Покрыто операционным потоком', _colored(-coverageAmount, cur)),
+        _bdRow('Осталось окупить', `<span style="color:${remaining > 0 ? 'var(--error)' : 'var(--success)'};font-weight:700">${formatCurrency(remaining, cur)}</span>`, true),
+      ].join('');
+      _bd['remaining'] = {
+        title: 'Осталось окупить — расшифровка',
+        rows,
+      };
     }
 
     // ── Recent Batches ────────────────────────────────────────────────────────
@@ -114,7 +260,7 @@ export async function renderDashboard(container) {
     });
     activeCustomers.forEach(c => {
       const bal = calcCustomerBalance(moneyLedger, c.id);
-      if (bal < 0) alerts.push({ type: 'warning', msg: `💰 Долг клиента: ${c.name} — ${formatCurrency(Math.abs(bal), settings.currency)}` });
+      if (bal < 0) alerts.push({ type: 'warning', msg: `💰 Долг клиента: ${c.name} — ${formatCurrency(Math.abs(bal), cur)}` });
     });
     if (batchesToPost > 0) {
       alerts.push({ type: 'info', msg: `📋 Партий без проводки: ${batchesToPost}` });
@@ -125,22 +271,22 @@ export async function renderDashboard(container) {
       ${pageHeader('Обзор')}
 
       <div class="kpi-grid">
-        ${kpiCard('Баланс кассы', formatCurrency(hobbyCash, settings.currency),
+        ${kpiCard('Баланс кассы', formatCurrency(hobbyCash, cur),
           'Депозиты и расходы из MoneyLedger',
-          hobbyCash >= 0 ? 'var(--success)' : 'var(--error)')}
+          hobbyCash >= 0 ? 'var(--success)' : 'var(--error)', 'cash')}
         ${kpiCard(
           hasCOGS ? 'Прибыль (за вычетом себест.)' : 'Выручка от продаж',
-          formatCurrency(hasCOGS ? profit : salesRevenue, settings.currency),
+          formatCurrency(hasCOGS ? profit : salesRevenue, cur),
           hasCOGS
-            ? `COGS: ${formatCurrency(frozenCOGS, settings.currency)}`
+            ? `COGS: ${formatCurrency(frozenCOGS, cur)}`
             : `${postedSales.length} продаж · ${giftCount} подарков`,
-          (hasCOGS ? profit : salesRevenue) >= 0 ? 'var(--success)' : 'var(--error)')}
-        ${kpiCard('Капекс (нетто)', formatCurrency(netCapex, settings.currency),
-          `Вложено: ${formatCurrency(capexInvested, settings.currency)} · возвращено: ${formatCurrency(capexRecovered, settings.currency)}`,
-          'var(--accent)')}
+          (hasCOGS ? profit : salesRevenue) >= 0 ? 'var(--success)' : 'var(--error)', 'revenue')}
+        ${kpiCard('Капекс (нетто)', formatCurrency(netCapex, cur),
+          `Вложено: ${formatCurrency(capexInvested, cur)} · возвращено: ${formatCurrency(capexRecovered, cur)}`,
+          'var(--accent)', 'capex')}
         ${kpiCard(t('batches_this_month'), String(batchesThisMonth), 'Новых партий в этом месяце')}
         ${kpiCard(t('negative_stock'), String(negativeStock.length), 'Компонентов с дефицитом', negativeStock.length > 0 ? 'var(--error)' : '')}
-        ${kpiCard(t('customer_debt'), formatCurrency(customerDebt, settings.currency), 'Суммарный долг клиентов', customerDebt > 0 ? 'var(--warning)' : '')}
+        ${kpiCard(t('customer_debt'), formatCurrency(customerDebt, cur), 'Суммарный долг клиентов', customerDebt > 0 ? 'var(--warning)' : '')}
       </div>
 
       <div class="section-card" style="margin-bottom:24px">
@@ -149,16 +295,25 @@ export async function renderDashboard(container) {
           ${netCapex <= 0 ? '<p class="text-muted">Данных о CAPEX нет.</p>' : `
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
               <div>
-                <div class="text-muted text-sm" style="margin-bottom:4px">Вложено в оборудование</div>
-                <div style="font-size:1.2em;font-weight:600">${formatCurrency(netCapex, settings.currency)}</div>
+                <div class="text-muted text-sm" style="margin-bottom:4px">
+                  Вложено в оборудование
+                  <button class="inline-info-btn" data-bd="capex" title="Расшифровка">ⓘ</button>
+                </div>
+                <div style="font-size:1.2em;font-weight:600">${formatCurrency(netCapex, cur)}</div>
               </div>
               <div>
-                <div class="text-muted text-sm" style="margin-bottom:4px">Покрыто операционным потоком</div>
-                <div style="font-size:1.2em;font-weight:600;color:var(--success)">${formatCurrency(coverageAmount, settings.currency)}</div>
+                <div class="text-muted text-sm" style="margin-bottom:4px">
+                  Покрыто операционным потоком
+                  <button class="inline-info-btn" data-bd="coverage" title="Расшифровка">ⓘ</button>
+                </div>
+                <div style="font-size:1.2em;font-weight:600;color:var(--success)">${formatCurrency(coverageAmount, cur)}</div>
               </div>
               <div>
-                <div class="text-muted text-sm" style="margin-bottom:4px">Осталось окупить</div>
-                <div style="font-size:1.2em;font-weight:600;color:${remaining > 0 ? 'var(--error)' : 'var(--success)'}">${formatCurrency(remaining, settings.currency)}</div>
+                <div class="text-muted text-sm" style="margin-bottom:4px">
+                  Осталось окупить
+                  <button class="inline-info-btn" data-bd="remaining" title="Расшифровка">ⓘ</button>
+                </div>
+                <div style="font-size:1.2em;font-weight:600;color:${remaining > 0 ? 'var(--error)' : 'var(--success)'}">${formatCurrency(remaining, cur)}</div>
               </div>
             </div>
             <div style="background:var(--bg-secondary);border-radius:8px;height:12px;overflow:hidden;margin-bottom:12px">
@@ -170,7 +325,7 @@ export async function renderDashboard(container) {
                 ${breakEvenProjection?.done
                   ? '<span style="color:var(--success);font-weight:600">Оборудование окупилось!</span>'
                   : breakEvenProjection
-                    ? `Прогноз окупаемости: <strong>${breakEvenProjection.date.toLocaleDateString('ru-RU', {month:'long',year:'numeric'})}</strong> (~${breakEvenProjection.monthsLeft} мес.) · ${formatCurrency(Math.round(breakEvenProjection.monthlyRate), settings.currency)}/мес.`
+                    ? `Прогноз окупаемости: <strong>${breakEvenProjection.date.toLocaleDateString('ru-RU', {month:'long',year:'numeric'})}</strong> (~${breakEvenProjection.monthsLeft} мес.) · ${formatCurrency(Math.round(breakEvenProjection.monthlyRate), cur)}/мес.`
                     : '<span class="text-muted">Недостаточно данных для прогноза</span>'
                 }
               </span>
@@ -212,6 +367,15 @@ export async function renderDashboard(container) {
         </div>
       </div>
     `;
+
+    // ── Breakdown click handler ────────────────────────────────────────────────
+    if (!container._bdListenerAdded) {
+      container.addEventListener('click', e => {
+        const btn = e.target.closest('.kpi-info-btn, .inline-info-btn');
+        if (btn?.dataset?.bd) _showBreakdown(btn.dataset.bd);
+      });
+      container._bdListenerAdded = true;
+    }
 
   } catch (e) {
     showError(container, e);
