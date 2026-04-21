@@ -955,7 +955,7 @@ function ebcToHex(ebc) {
 
 // ─── Grain bill rows ──────────────────────────────────────────────────────────
 function renderGrainRows(grains, totalGrainG) {
-  if (!grains.length) return '<p class="text-muted" style="font-size:12px;padding:4px 0">Нет солода</p>';
+  if (!grains.length) return '<p class="ing-empty">Нет солода</p>';
   const grainComps = components.filter(c => ['malt','grain_distill','sugar','other'].includes(c.type) && c.is_active !== 'FALSE');
   return grains.map(ing => {
     const comp = components.find(c => c.id === ing.component_id);
@@ -965,22 +965,22 @@ function renderGrainRows(grains, totalGrainG) {
     const hex  = ebcToHex(ebc);
     const ebcStyle = ebc > 0 ? `background:${hex}22;color:${hex};border:1px solid ${hex}55` : 'opacity:0';
     return `
-      <div class="ingredient-row grain-row ing-table-row ing-grain-row">
-        <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}">
+      <div class="ingredient-row grain-row">
+        <select class="ingredient-comp" data-id="${escHtml(ing.id)}">
           ${grainComps.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
         </select>
         <span class="ing-cell-ebc" style="${ebcStyle}">${ebc > 0 ? ebc + ' EBC' : ''}</span>
-        <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" value="${escHtml(ing.qty||'')}" placeholder="г" step="50">
+        <input type="number" class="ingredient-qty" data-id="${escHtml(ing.id)}" value="${escHtml(ing.qty||'')}" placeholder="г" step="50">
         <span class="ingredient-unit ing-cell-unit">г</span>
         <span class="ing-cell-pct">${pct > 0 ? pct + '%' : ''}</span>
-        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}">✕</button>
+        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}">🗑</button>
       </div>`;
   }).join('');
 }
 
 // ─── Hop rows (boil / whirlpool) ─────────────────────────────────────────────
 function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = false) {
-  if (!hops.length) return `<p class="text-muted" style="font-size:12px;padding:4px 0">Нет хмеля</p>`;
+  if (!hops.length) return `<p class="ing-empty">Нет хмеля</p>`;
   const hopComps = components.filter(c => c.type === 'hop' && c.is_active !== 'FALSE');
   const rowCls   = isWhirlpool ? 'hop-row-whirlpool' : 'hop-row-boil';
   return hops.map(ing => {
@@ -992,16 +992,16 @@ function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = 
       : 0;
     const ibuLabel = ibu > 0 ? `${isWhirlpool ? '~' : ''}${Math.round(ibu * 10) / 10} IBU` : '';
     return `
-      <div class="ingredient-row ${rowCls} ing-table-row ing-hop-row">
-        <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">
+      <div class="ingredient-row ${rowCls}">
+        <select class="ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">
           ${hopComps.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
         </select>
-        <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="г" step="5">
+        <input type="number" class="ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="г" step="5">
         <span class="ingredient-unit ing-cell-unit">г</span>
         <span class="ing-cell-alpha">${aa !== null ? aa + '%α' : ''}</span>
-        <input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="мин" step="5">
+        <input type="number" class="ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="мин" step="5">
         <span class="hop-ibu-live ing-cell-ibu">${ibuLabel}</span>
-        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
+        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
       </div>`;
   }).join('');
 }
@@ -1327,22 +1327,22 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
           </div>
           <div id="water-salts-list">
             ${waterAdditions.length === 0 ? '<p class="text-muted" style="font-size:12px">Нет добавок</p>' :
-              `<div class="ing-table">
-                <div class="ing-table-head ing-salt-head">
+              `<div class="ing-table ing-salt-table">
+                <div class="ing-table-head">
                   <span>Соль</span>
-                  <span style="text-align:center">г</span>
+                  <span class="ing-th-c">г</span>
                   <span></span>
                   <span>Распределение</span>
                   <span></span>
                 </div>
-                ${waterAdditions.map((add, i) => `<div class="water-salt-row ing-table-row ing-salt-row" data-idx="${i}">
-                  <select class="form-control water-salt-select" data-idx="${i}">
+                ${waterAdditions.map((add, i) => `<div class="water-salt-row" data-idx="${i}">
+                  <select class="water-salt-select" data-idx="${i}">
                     ${BREWING_SALTS.map(s => `<option value="${s.id}" ${s.id===add.salt?'selected':''}>${s.formula} — ${escHtml(s.name)}</option>`).join('')}
                   </select>
-                  <input type="number" class="form-control water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0">
+                  <input type="number" class="water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0">
                   <span class="ing-cell-unit">г</span>
-                  <span class="water-salt-split ing-cell-unit" data-idx="${i}" style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${saltSplit(parseFloat(add.amount)||0)}</span>
-                  <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}">✕</button>
+                  <span class="water-salt-split ing-cell-unit" data-idx="${i}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${saltSplit(parseFloat(add.amount)||0)}</span>
+                  <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}">🗑</button>
                 </div>`).join('')}
               </div>`}
           </div>
@@ -1361,13 +1361,13 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
       </div>
       <div class="section-card-body">
         <div class="form-grid">
-          <div class="ing-table">
-            <div class="ing-table-head ing-grain-head">
+          <div class="ing-table ing-grain-table">
+            <div class="ing-table-head">
               <span>Солод / Засыпь</span>
-              <span style="text-align:center">EBC</span>
-              <span style="text-align:center">г</span>
+              <span class="ing-th-c">EBC</span>
+              <span class="ing-th-c">г</span>
               <span></span>
-              <span style="text-align:right">%</span>
+              <span class="ing-th-r">%</span>
               <span></span>
             </div>
             ${renderGrainRows(grains, totalGrainG)}
@@ -1414,14 +1414,14 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
             ${formField('pH до кипа', `<input type="number" name="ph_preboil" class="form-control" value="${escHtml(data.ph_preboil||'')}" step="0.1" min="4" max="8" placeholder="5.4">`)}
           </div>
           <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin:4px 0 2px">Хмель — кипячение</div>
-          <div class="ing-table">
-            <div class="ing-table-head ing-hop-head">
+          <div class="ing-table ing-hop-table">
+            <div class="ing-table-head">
               <span>Ингредиент</span>
-              <span style="text-align:center">г</span>
+              <span class="ing-th-c">г</span>
               <span></span>
-              <span style="text-align:center">%α</span>
-              <span style="text-align:center">мин</span>
-              <span style="text-align:right">IBU</span>
+              <span class="ing-th-c">%α</span>
+              <span class="ing-th-c">мин</span>
+              <span class="ing-th-r">IBU</span>
               <span></span>
             </div>
             ${renderHopRows(boilHops, 'boil', data.boil_time_min, og, batchVol)}
@@ -1437,14 +1437,14 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
               ${formField('Темп. вирпула (°C)', `<input type="number" name="whirlpool_temp_c" class="form-control" value="${escHtml(data.whirlpool_temp_c||'80')}" step="1">`)}
               ${formField('Время вирпула (мин)', `<input type="number" name="whirlpool_time_min" class="form-control" value="${escHtml(data.whirlpool_time_min||'20')}" step="5">`)}
             </div>
-            <div class="ing-table">
-              <div class="ing-table-head ing-hop-head">
+            <div class="ing-table ing-hop-table">
+              <div class="ing-table-head">
                 <span>Ингредиент</span>
-                <span style="text-align:center">г</span>
+                <span class="ing-th-c">г</span>
                 <span></span>
-                <span style="text-align:center">%α</span>
-                <span style="text-align:center">мин</span>
-                <span style="text-align:right">IBU</span>
+                <span class="ing-th-c">%α</span>
+                <span class="ing-th-c">мин</span>
+                <span class="ing-th-r">IBU</span>
                 <span></span>
               </div>
               ${renderHopRows(whirlpool, 'whirlpool', data.whirlpool_time_min, og, batchVol, true)}
@@ -1798,15 +1798,15 @@ function renderIngredientList(items, stageKey, allowedTypes = [], tableType = ''
       const comp = components.find(c => c.id === ing.component_id);
       const unit = comp?.unit || '';
       return `
-        <div class="ingredient-row additive-row ing-table-row ing-grain-row">
-          <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">
+        <div class="ingredient-row additive-row">
+          <select class="ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">
             ${filteredComponents.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
           </select>
-          <span class="ing-cell-empty"></span>
-          <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="кол-во" step="any">
+          <span></span>
+          <input type="number" class="ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="кол-во" step="any">
           <span class="ingredient-unit ing-cell-unit">${escHtml(unit)}</span>
-          <span class="ing-cell-empty"></span>
-          <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
+          <span></span>
+          <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
         </div>`;
     }).join('');
   }
@@ -1817,16 +1817,16 @@ function renderIngredientList(items, stageKey, allowedTypes = [], tableType = ''
       const unit = comp?.unit || '';
       const hasTime = stageKey === 'boil' || stageKey === 'dry_hop';
       return `
-        <div class="ingredient-row additive-row${hasTime ? ' additive-row-timed' : ''} ing-table-row ing-hop-row">
-          <select class="form-control ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">
+        <div class="ingredient-row additive-row${hasTime ? ' additive-row-timed' : ''}">
+          <select class="ingredient-comp" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">
             ${filteredComponents.map(c => `<option value="${c.id}" ${c.id===ing.component_id?'selected':''}>${escHtml(c.name)}</option>`).join('')}
           </select>
-          <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="кол-во" step="any">
+          <input type="number" class="ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="кол-во" step="any">
           <span class="ingredient-unit ing-cell-unit">${escHtml(unit)}</span>
-          <span class="ing-cell-empty"></span>
-          ${hasTime ? `<input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="${stageKey === 'boil' ? 'мин' : 'день'}">` : '<span class="ing-cell-empty"></span>'}
-          <span class="ing-cell-empty"></span>
-          <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
+          <span></span>
+          ${hasTime ? `<input type="number" class="ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="${stageKey === 'boil' ? 'мин' : 'день'}">` : '<span></span>'}
+          <span></span>
+          <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
         </div>`;
     }).join('');
   }
@@ -1843,7 +1843,7 @@ function renderIngredientList(items, stageKey, allowedTypes = [], tableType = ''
         <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="кол-во" step="any">
         <span class="ingredient-unit text-muted" style="font-size:0.85em;text-align:center">${escHtml(unit)}</span>
         ${hasTime ? `<input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="${stageKey === 'boil' ? 'мин' : 'день'}">` : ''}
-        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">✕</button>
+        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
       </div>`;
   }).join('');
 }

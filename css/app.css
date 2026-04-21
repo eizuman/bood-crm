@@ -939,39 +939,57 @@ body.modal-open { overflow: hidden; }
 .ingredient-row.additive-row-timed .ingredient-qty { width: 52px; flex-shrink: 0; }
 .ingredient-row.additive-row-timed .ingredient-time { width: 44px; flex-shrink: 0; }
 
-/* ── Ingredient grid tables ──────────────────────────────────────────────── */
-.ing-table { margin-bottom: 4px; }
-.ing-table-head {
+/* ── Ingredient grid tables (CSS subgrid for perfect column alignment) ───── */
+/* Parent grid defines columns; rows inherit them via subgrid */
+.ing-table {
   display: grid;
+  column-gap: 6px;
+  row-gap: 0;
   align-items: center;
-  gap: 4px;
-  padding: 1px 2px 3px;
+  margin-bottom: 4px;
+}
+/* column templates */
+.ing-grain-table { grid-template-columns: minmax(0,1fr) 52px 58px 16px 36px 28px; }
+.ing-hop-table   { grid-template-columns: minmax(0,1fr) 52px 16px 50px 44px 52px 28px; }
+.ing-salt-table  { grid-template-columns: minmax(0,1fr) 58px 16px minmax(0,1fr) 28px; }
+
+/* Header + data rows: each spans all columns, uses subgrid internally */
+.ing-table > .ing-table-head,
+.ing-table > .ingredient-row,
+.ing-table > .water-salt-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 3px 2px;
+  border-radius: 3px;
+}
+/* Header style */
+.ing-table > .ing-table-head {
+  padding: 2px 2px 5px;
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 1px;
 }
-.ing-table-row {
-  display: grid !important;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 2px;
-  margin-bottom: 0;
-  border-radius: 3px;
+/* Alternating row backgrounds — header is child 1 (odd), rows start from 2 */
+.ing-table > .ingredient-row:nth-child(even),
+.ing-table > .water-salt-row:nth-child(even) {
+  background: var(--bg-secondary);
 }
-.ing-table-row:nth-child(even) { background: var(--bg-secondary); }
-/* Grain: select | EBC | qty | unit | pct | del */
-.ing-grain-head, .ing-grain-row { grid-template-columns: 1fr 46px 60px 14px 36px 28px; }
-/* Hop/boil/whirlpool: select | qty | unit | alpha | time | ibu | del */
-.ing-hop-head,  .ing-hop-row   { grid-template-columns: 1fr 52px 14px 46px 40px 52px 28px; }
-/* Salt: select | qty | unit | split | del */
-.ing-salt-head, .ing-salt-row  { grid-template-columns: 1fr 56px 14px 130px 28px; }
+/* Empty message spans full width */
+.ing-table > .ing-empty { grid-column: 1/-1; font-size: 12px; padding: 4px 2px; color: var(--text-muted); }
 
-/* Transparent inputs inside grid rows */
-.ing-table-row .form-control {
+/* Transparent inputs in grid rows */
+.ing-table .ingredient-comp,
+.ing-table .ingredient-qty,
+.ing-table .ingredient-time,
+.ing-table .water-salt-select,
+.ing-table .water-salt-amount {
+  width: 100%;
+  min-width: 0;
   height: 26px;
   padding: 2px 4px;
   font-size: 12px;
@@ -979,34 +997,38 @@ body.modal-open { overflow: hidden; }
   background: transparent;
   border-bottom: 1px solid transparent;
   border-radius: 0;
-  min-width: 0;
+  box-sizing: border-box;
 }
-.ing-table-row .form-control:focus {
+.ing-table .ingredient-comp:focus,
+.ing-table .ingredient-qty:focus,
+.ing-table .ingredient-time:focus,
+.ing-table .water-salt-select:focus,
+.ing-table .water-salt-amount:focus {
   border-bottom-color: var(--accent);
   outline: none;
   box-shadow: none;
-  background: var(--bg-secondary);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
-/* Delete button tight fit */
-.ing-table-row .btn-remove-ingredient,
-.ing-table-row .btn-remove-salt {
+/* Delete button */
+.ing-table .btn-remove-ingredient,
+.ing-table .btn-remove-salt {
   width: 24px;
   height: 24px;
   padding: 0;
-  font-size: 10px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
+  justify-self: center;
 }
 /* Cell helpers */
-.ing-cell-ebc   { border-radius: 4px; padding: 1px 3px; font-size: 10px; text-align: center; white-space: nowrap; }
+.ing-cell-ebc   { border-radius: 4px; padding: 1px 4px; font-size: 10px; text-align: center; white-space: nowrap; }
 .ing-cell-alpha { font-size: 10px; color: var(--accent-amber); text-align: center; white-space: nowrap; }
 .ing-cell-ibu   { font-size: 10px; color: var(--accent-amber-light); text-align: right; white-space: nowrap; }
 .ing-cell-unit  { font-size: 10px; color: var(--text-muted); text-align: center; }
 .ing-cell-pct   { font-size: 10px; color: var(--text-muted); text-align: right; }
-.ing-cell-empty { }
-/* Keep hop-ibu-live as grid cell */
-.ing-table-row .hop-ibu-live { flex-shrink: unset; }
+.ing-th-c { text-align: center; }
+.ing-th-r { text-align: right; }
 
 /* OG/FG/toggle grid */
 .og-fg-grid {
