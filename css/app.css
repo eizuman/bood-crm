@@ -940,7 +940,6 @@ body.modal-open { overflow: hidden; }
 .ingredient-row.additive-row-timed .ingredient-time { width: 44px; flex-shrink: 0; }
 
 /* ── Ingredient grid tables (CSS subgrid for perfect column alignment) ───── */
-/* Parent grid defines columns; rows inherit them via subgrid */
 .ing-table {
   display: grid;
   column-gap: 6px;
@@ -948,12 +947,11 @@ body.modal-open { overflow: hidden; }
   align-items: center;
   margin-bottom: 4px;
 }
-/* column templates */
 .ing-grain-table { grid-template-columns: minmax(0,1fr) 52px 58px 16px 36px 28px; }
 .ing-hop-table   { grid-template-columns: minmax(0,1fr) 52px 16px 50px 44px 52px 28px; }
 .ing-salt-table  { grid-template-columns: minmax(0,1fr) 58px 16px minmax(0,1fr) 28px; }
 
-/* Header + data rows: each spans all columns, uses subgrid internally */
+/* Header + rows span all columns, use subgrid internally */
 .ing-table > .ing-table-head,
 .ing-table > .ingredient-row,
 .ing-table > .water-salt-row {
@@ -961,10 +959,8 @@ body.modal-open { overflow: hidden; }
   display: grid;
   grid-template-columns: subgrid;
   align-items: center;
-  padding: 3px 2px;
-  border-radius: 3px;
+  padding: 4px 2px;
 }
-/* Header style */
 .ing-table > .ing-table-head {
   padding: 2px 2px 5px;
   font-size: 10px;
@@ -973,16 +969,23 @@ body.modal-open { overflow: hidden; }
   text-transform: uppercase;
   letter-spacing: 0.4px;
   border-bottom: 1px solid var(--border);
+  margin-bottom: 1px;
 }
-/* Alternating row backgrounds — header is child 1 (odd), rows start from 2 */
+/* Row separators */
+.ing-table > .ingredient-row,
+.ing-table > .water-salt-row {
+  border-bottom: 1px solid var(--border);
+}
+.ing-table > .ingredient-row:last-child,
+.ing-table > .water-salt-row:last-child { border-bottom: none; }
+/* Alternating row tint */
 .ing-table > .ingredient-row:nth-child(even),
 .ing-table > .water-salt-row:nth-child(even) {
-  background: var(--bg-secondary);
+  background: rgba(255,255,255,0.03);
 }
-/* Empty message spans full width */
 .ing-table > .ing-empty { grid-column: 1/-1; font-size: 12px; padding: 4px 2px; color: var(--text-muted); }
 
-/* Transparent inputs in grid rows */
+/* Inputs inside grid rows — transparent, no border, correct colour */
 .ing-table .ingredient-comp,
 .ing-table .ingredient-qty,
 .ing-table .ingredient-time,
@@ -993,6 +996,7 @@ body.modal-open { overflow: hidden; }
   height: 26px;
   padding: 2px 4px;
   font-size: 12px;
+  color: var(--text-primary);
   border: none;
   background: transparent;
   border-bottom: 1px solid transparent;
@@ -1007,20 +1011,38 @@ body.modal-open { overflow: hidden; }
   border-bottom-color: var(--accent);
   outline: none;
   box-shadow: none;
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  background: rgba(212,137,10,0.07);
 }
-/* Delete button */
-.ing-table .btn-remove-ingredient,
-.ing-table .btn-remove-salt {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  font-size: 13px;
-  display: flex;
+
+/* ── Ghost trash button (used everywhere for ingredient / rest removal) ─── */
+.btn-remove-ingredient,
+.btn-remove-rest,
+.btn-remove-salt {
+  background: none;
+  border: none;
+  color: var(--danger, #c0392b);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity 0.12s, background 0.12s;
   justify-self: center;
 }
+.btn-remove-ingredient:hover,
+.btn-remove-rest:hover,
+.btn-remove-salt:hover {
+  opacity: 1;
+  background: rgba(192,57,43,0.15);
+}
+
 /* Cell helpers */
 .ing-cell-ebc   { border-radius: 4px; padding: 1px 4px; font-size: 10px; text-align: center; white-space: nowrap; }
 .ing-cell-alpha { font-size: 10px; color: var(--accent-amber); text-align: center; white-space: nowrap; }

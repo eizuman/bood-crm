@@ -973,7 +973,7 @@ function renderGrainRows(grains, totalGrainG) {
         <input type="number" class="ingredient-qty" data-id="${escHtml(ing.id)}" value="${escHtml(ing.qty||'')}" placeholder="г" step="50">
         <span class="ingredient-unit ing-cell-unit">г</span>
         <span class="ing-cell-pct">${pct > 0 ? pct + '%' : ''}</span>
-        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}">🗑</button>
+        <button type="button" class="btn-remove-ingredient" data-id="${escHtml(ing.id)}">🗑</button>
       </div>`;
   }).join('');
 }
@@ -1001,7 +1001,7 @@ function renderHopRows(hops, stageKey, boilTimeMin, og, batchVol, isWhirlpool = 
         <span class="ing-cell-alpha">${aa !== null ? aa + '%α' : ''}</span>
         <input type="number" class="ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="мин" step="5">
         <span class="hop-ibu-live ing-cell-ibu">${ibuLabel}</span>
-        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
+        <button type="button" class="btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
       </div>`;
   }).join('');
 }
@@ -1030,7 +1030,7 @@ function renderMashBlocks(rests) {
       </select>
       <input type="text" class="form-control mash-rest-field mash-rest-name" data-idx="${i}" data-field="name"
         value="${escHtml(r.name||'')}" placeholder="название (опц.)">
-      <button type="button" class="btn btn-sm btn-danger btn-remove-rest" data-idx="${i}" style="flex-shrink:0">✕</button>
+      <button type="button" class="btn-remove-rest" data-idx="${i}">🗑</button>
     </div>`).join('');
 }
 
@@ -1342,7 +1342,7 @@ function renderBeerGrid(container, data, ingredients, mashRests) {
                   <input type="number" class="water-salt-amount" data-idx="${i}" value="${escHtml(String(add.amount||''))}" step="0.1" placeholder="г" min="0">
                   <span class="ing-cell-unit">г</span>
                   <span class="water-salt-split ing-cell-unit" data-idx="${i}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${saltSplit(parseFloat(add.amount)||0)}</span>
-                  <button type="button" class="btn btn-sm btn-danger btn-remove-salt" data-idx="${i}">🗑</button>
+                  <button type="button" class="btn-remove-salt" data-idx="${i}">🗑</button>
                 </div>`).join('')}
               </div>`}
           </div>
@@ -1781,7 +1781,7 @@ function renderMashRests(rests) {
         <option value="step" ${r.rest_type==='step'?'selected':''}>step</option>
         <option value="decoction" ${r.rest_type==='decoction'?'selected':''}>decoction</option>
       </select>
-      <button type="button" class="btn btn-sm btn-danger btn-remove-rest" data-idx="${i}">✕</button>
+      <button type="button" class="btn-remove-rest" data-idx="${i}">🗑</button>
     </div>
   `).join('');
 }
@@ -1806,7 +1806,7 @@ function renderIngredientList(items, stageKey, allowedTypes = [], tableType = ''
           <input type="number" class="ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="кол-во" step="any">
           <span class="ingredient-unit ing-cell-unit">${escHtml(unit)}</span>
           <span></span>
-          <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
+          <button type="button" class="btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
         </div>`;
     }).join('');
   }
@@ -1826,7 +1826,7 @@ function renderIngredientList(items, stageKey, allowedTypes = [], tableType = ''
           <span></span>
           ${hasTime ? `<input type="number" class="ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="${stageKey === 'boil' ? 'мин' : 'день'}">` : '<span></span>'}
           <span></span>
-          <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
+          <button type="button" class="btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
         </div>`;
     }).join('');
   }
@@ -1843,7 +1843,7 @@ function renderIngredientList(items, stageKey, allowedTypes = [], tableType = ''
         <input type="number" class="form-control ingredient-qty" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.qty||'')}" placeholder="кол-во" step="any">
         <span class="ingredient-unit text-muted" style="font-size:0.85em;text-align:center">${escHtml(unit)}</span>
         ${hasTime ? `<input type="number" class="form-control ingredient-time" data-id="${escHtml(ing.id)}" data-stage="${stageKey}" value="${escHtml(ing.time_meta||'')}" placeholder="${stageKey === 'boil' ? 'мин' : 'день'}">` : ''}
-        <button type="button" class="btn btn-sm btn-danger btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
+        <button type="button" class="btn-remove-ingredient" data-id="${escHtml(ing.id)}" data-stage="${stageKey}">🗑</button>
       </div>`;
   }).join('');
 }
