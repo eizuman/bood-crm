@@ -3,7 +3,7 @@ import { getRows, appendRow, updateRow, deleteRow, genId, now, getSettings } fro
 import { calcOnHand } from '../utils.js';
 import { showModal, closeModal, showToast, showConfirm, showLoading, showError,
   renderTable, createTypeChip, createMovementChip, pageHeader,
-  formField, numberInput, textInput, textareaInput, collectForm } from '../ui.js';
+  formField, numberInput, textInput, selectInput, textareaInput, collectForm } from '../ui.js';
 import t from '../i18n.js';
 import { escHtml, formatCurrency, formatDate, formatDateTime } from '../utils.js';
 
@@ -241,7 +241,7 @@ function showPurchaseForm(pageContainer) {
     if (!compId) return '';
     if (compId === '__new__') return `
       <div id="new-comp-panel" style="border-left:3px solid var(--accent-amber);padding-left:12px;margin-bottom:4px">
-        ${formField('Название <span class="text-danger">*</span>', textInput('nc_name', ''))}
+        ${formField('Название', textInput('nc_name', ''), '', true)}
         ${formField('Производитель / Бренд', textInput('nc_brand', ''))}
         <div class="form-row-2">
           <div class="form-field"><label class="form-label">Тип <span class="text-danger">*</span></label>${selectInput('nc_type', typeOpts, 'malt')}</div>
