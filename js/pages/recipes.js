@@ -94,9 +94,10 @@ function recipeCard(r) {
     <div class="recipe-card" data-id="${r.id}">
       <div class="recipe-card-header">
         <div style="display:flex;gap:12px;align-items:center">
-          ${r.label_image
-            ? `<img src="${r.label_image}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display='none'">`
-            : `<div style="width:48px;height:48px;border-radius:6px;background:var(--bg-tertiary);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:1.2em;flex-shrink:0">📷</div>`}
+          <div style="width:48px;height:48px;border-radius:6px;background:var(--bg-tertiary);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:1.2em;flex-shrink:0;overflow:hidden;position:relative">
+            <span>📷</span>
+            ${r.label_image ? `<img src="${escHtml(r.label_image)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">` : ''}
+          </div>
           <div>
             <h3 class="recipe-name">${escHtml(r.name)}</h3>
             <span class="recipe-style text-muted">${escHtml(r.style || '')}</span>
