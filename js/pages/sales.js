@@ -12,6 +12,13 @@ let components = [];
 let inventory = [];
 let moneyLedger = [];
 let settings = {};
+let _filterMonth = null;
+
+function _monthLabel(ym) {
+  const [y, m] = ym.split('-');
+  const names = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+  return `${names[parseInt(m, 10) - 1]} ${y}`;
+}
 
 export async function renderSales(container) {
   showLoading(container);
@@ -32,25 +39,51 @@ export async function renderSales(container) {
 
 function _render(container) {
   const active = sales.filter(s => s.is_active !== 'FALSE');
-  const sorted = [...active].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const months = [...new Set(
+    active.map(s => s.created_at?.slice(0, 7)).filter(Boolean)
+  )].sort().reverse();
+
+  const filtered = _filterMonth
+    ? active.filter(s => s.created_at?.startsWith(_filterMonth))
+    : active;
+
+  const postedSales = filtered.filter(s => s.status === 'posted' && s.sale_type !== 'gift');
+  const totalAmount = postedSales.reduce((s, r) => s + parseFloat(r.total_amount || 0), 0);
+  const totalLiters = filtered.reduce((s, r) => {
+    try { return s + JSON.parse(r.items_snapshot || '[]').reduce((ss, i) => ss + (parseFloat(i.qty) || 0), 0); }
+    catch { return s; }
+  }, 0);
+
+  const n = filtered.length;
+  const dealWord = n === 1 ? 'сделка' : n > 1 && n < 5 ? 'сделки' : 'сделок';
 
   container.innerHTML = `
     ${pageHeader(t('sales'), `
       <button class="btn btn-primary" id="btn-new-sale">+ Продажа</button>
       <button class="btn btn-secondary" id="btn-new-gift" style="margin-left:8px">🎁 Подарок</button>
     `)}
+    <div class="filter-chips" style="margin-bottom:12px">
+      <button class="chip-filter${!_filterMonth ? ' active' : ''}" data-month="">Все</button>
+      ${months.map(m => `<button class="chip-filter${_filterMonth === m ? ' active' : ''}" data-month="${escHtml(m)}">${_monthLabel(m)}</button>`).join('')}
+    </div>
+    <div class="sales-totals-bar">
+      <span><strong>${n}</strong> ${dealWord}</span>
+      <span><strong>${totalLiters.toFixed(1)} л</strong></span>
+      <span class="sales-totals-amount">${formatCurrency(totalAmount, settings.currency)}</span>
+    </div>
     <div id="sales-table"></div>
   `;
 
   const cols = [
-    { label: 'Дата', render: r => formatDate(r.created_at) },
-    { label: t('customer'), render: r => {
-      const c = customers.find(c => c.id === r.customer_id);
-      const name = escHtml(c?.name || (r.sale_type === 'gift' ? '— без получателя —' : '—'));
-      return r.sale_type === 'gift'
-        ? `<span>🎁 ${name}</span>`
-        : name;
-    }},
+    { label: 'Дата', sortKey: 'created_at', render: r => formatDate(r.created_at) },
+    { label: t('customer'),
+      sortFn: r => customers.find(c => c.id === r.customer_id)?.name || '',
+      render: r => {
+        const c = customers.find(c => c.id === r.customer_id);
+        const name = escHtml(c?.name || (r.sale_type === 'gift' ? '— без получателя —' : '—'));
+        return r.sale_type === 'gift' ? `<span>🎁 ${name}</span>` : name;
+      }},
     { label: 'Позиции', render: r => {
       try {
         const items = JSON.parse(r.items_snapshot || '[]');
@@ -58,10 +91,12 @@ function _render(container) {
         return `<span class="text-muted">${items.length} поз. · ${liters.toFixed(1)} л</span>`;
       } catch { return '—'; }
     }},
-    { label: 'Сумма', render: r => {
-      if (r.sale_type === 'gift') return `<span class="text-muted">Подарок</span>`;
-      return formatCurrency(r.total_amount, settings.currency);
-    }},
+    { label: 'Сумма',
+      sortFn: r => parseFloat(r.total_amount || 0),
+      render: r => {
+        if (r.sale_type === 'gift') return `<span class="text-muted">Подарок</span>`;
+        return formatCurrency(r.total_amount, settings.currency);
+      }},
     { label: 'Статус', render: r => {
       const cls = r.status === 'posted' ? 'badge-success' : 'badge-muted';
       return `<span class="${cls}">${r.status === 'posted' ? '✓ Проведена' : '○ Черновик'}</span>`;
@@ -72,8 +107,17 @@ function _render(container) {
     `},
   ];
 
-  renderTable(container.querySelector('#sales-table'), cols, sorted, {
+  renderTable(container.querySelector('#sales-table'), cols, filtered, {
     emptyMessage: 'Нет продаж',
+    defaultSortCol: 0,
+    defaultSortDir: -1,
+  });
+
+  container.querySelectorAll('.chip-filter[data-month]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _filterMonth = btn.dataset.month || null;
+      _render(container);
+    });
   });
 
   container.querySelector('#btn-new-sale')?.addEventListener('click', () => showSaleForm(container, 'sale'));
