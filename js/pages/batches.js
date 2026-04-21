@@ -138,9 +138,17 @@ function showBatchDetail(batch, pageContainer) {
       case 'posting': renderPostingTab(tabContent, editedBatch, pageContainer, overlay); break;
       case 'summary': renderSummaryTab(tabContent, editedBatch); break;
     }
-    // Sync fields
+    // Sync fields; auto-convert Brix → SG for og/fg inputs
     tabContent.querySelectorAll('[name]').forEach(el => {
-      el.addEventListener('change', () => { editedBatch[el.name] = el.value; });
+      el.addEventListener('change', () => {
+        let val = el.value;
+        if ((el.name === 'og' || el.name === 'fg') && parseFloat(val) > 2) {
+          val = normalizeGravity(val);
+          el.value = val;
+          el.title = `Введено как Brix, сохранено как SG: ${val}`;
+        }
+        editedBatch[el.name] = val;
+      });
     });
   }
 
@@ -325,12 +333,11 @@ function renderPostingTab(container, batch, pageContainer, overlay) {
             return `<div class="posting-row"><span>${escHtml(comp?.name||'?')}</span><span>${escHtml(ing.qty||'?')} ${escHtml(comp?.unit||'')}</span></div>`;
           }).join('') || '<p class="text-muted">Нет упаковочных материалов</p>'}
           <div class="posting-actions">
-            <button class="btn btn-primary ${packPosted || !brewPosted ? 'disabled' : ''}" id="btn-post-packaging" ${packPosted || !brewPosted ? 'disabled' : ''}>
+            <button class="btn btn-primary ${packPosted ? 'disabled' : ''}" id="btn-post-packaging" ${packPosted ? 'disabled' : ''}>
               ${isBeer ? t('post_packaging') : 'Провести выход дистиллята'}
             </button>
             ${packPosted ? `<button class="btn btn-secondary" id="btn-undo-packaging">↩ ${t('undo')}</button>` : ''}
           </div>
-          ${!brewPosted && !packPosted ? '<p class="text-warning text-sm">⚠ Сначала проведите варку/брагу</p>' : ''}
         </div>
       </div>
     </div>
@@ -347,7 +354,7 @@ function renderPostingTab(container, batch, pageContainer, overlay) {
 
   // Post Packaging
   container.querySelector('#btn-post-packaging')?.addEventListener('click', () => {
-    if (packPosted || !brewPosted) return;
+    if (packPosted) return;
     showConfirm(t('confirm_post'), 'Упаковочные материалы будут списаны, готовый продукт оприходован', async () => {
       try {
         const ts = now();
@@ -424,6 +431,17 @@ function renderPostingTab(container, batch, pageContainer, overlay) {
 
 function compDisplayName(c) {
   return c.brand ? `${c.name} (${c.brand})` : c.name;
+}
+
+// Auto-convert Brix → SG. Values > 2 are assumed Brix; 1.0–1.2 are SG.
+function brixToSg(brix) {
+  const b = parseFloat(brix);
+  return +(1 + (b / (258.6 - (b / 258.2) * 227.1))).toFixed(4);
+}
+function normalizeGravity(val) {
+  const v = parseFloat(val);
+  if (!v) return val;
+  return v > 2 ? String(brixToSg(v)) : val;
 }
 
 function showBrewPostDialog(batch, brewIngredients, isBeer, pageContainer) {
