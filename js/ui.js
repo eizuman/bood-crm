@@ -69,11 +69,12 @@ export function showModal(title, contentHTML, buttons = [], options = {}) {
 }
 
 export function closeModal() {
-  if (activeModal) {
-    activeModal.classList.remove('modal-visible');
-    setTimeout(() => { activeModal?.remove(); activeModal = null; }, 200);
-    document.body.classList.remove('modal-open');
-  }
+  if (!activeModal) return;
+  const el = activeModal;
+  activeModal = null;
+  document.body.classList.remove('modal-open');
+  el.classList.remove('modal-visible');
+  setTimeout(() => el.remove(), 200);
 }
 
 export function getModalBody() {
