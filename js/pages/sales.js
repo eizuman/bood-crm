@@ -193,12 +193,27 @@ function showSaleForm(pageContainer, saleType = 'sale') {
   // Packaging components
   const packComps = components.filter(c => c.type === 'packaging' && c.is_active !== 'FALSE');
 
-  let productLines = []; // {batch_id, qty_l, price_per_l}
+  const CONTAINER_SIZES = [
+    { value: '0.44', label: '0.44 л' },
+    { value: '1',    label: '1 л' },
+    { value: '1.5',  label: '1.5 л' },
+    { value: 'custom', label: 'Другой...' },
+  ];
+
+  // {batch_id, container_size, custom_size, qty_containers, price_per_l}
+  let productLines = [];
   let packLines    = []; // {component_id, qty, unit_price}
+
+  function lineQtyL(line) {
+    const size = line.container_size === 'custom'
+      ? (parseFloat(line.custom_size) || 0)
+      : (parseFloat(line.container_size) || 0);
+    return (parseFloat(line.qty_containers) || 0) * size;
+  }
 
   function calcTotal() {
     if (isGift) return 0;
-    const prod = productLines.reduce((s, l) => s + (parseFloat(l.qty_l)||0) * (parseFloat(l.price_per_l)||0), 0);
+    const prod = productLines.reduce((s, l) => s + lineQtyL(l) * (parseFloat(l.price_per_l) || 0), 0);
     const pack = packLines.reduce((s, l) => s + (parseFloat(l.qty)||0) * (parseFloat(l.unit_price)||0), 0);
     return prod + pack;
   }
@@ -210,17 +225,24 @@ function showSaleForm(pageContainer, saleType = 'sale') {
 
     if (prodEl) {
       prodEl.innerHTML = productLines.length ? productLines.map((line, i) => {
-        const batch = batches.find(b => b.id === line.batch_id);
+        const qtyL = lineQtyL(line);
+        const subtotal = isGift ? 0 : qtyL * (parseFloat(line.price_per_l) || 0);
+        const isCustom = line.container_size === 'custom';
         return `
-          <div class="sale-line" data-idx="${i}">
-            <select class="form-control prod-batch" data-idx="${i}">
-              ${packBatches.map(b => `<option value="${b.id}" ${b.id === line.batch_id ? 'selected' : ''}>${escHtml(b.name)} — ${b.packaged_l} л</option>`).join('')}
+          <div class="sale-line" data-idx="${i}" style="flex-wrap:wrap;gap:6px">
+            <select class="form-control prod-batch" data-idx="${i}" style="flex:1;min-width:160px">
+              ${packBatches.map(b => `<option value="${b.id}" ${b.id === line.batch_id ? 'selected' : ''}>${escHtml(b.name)}</option>`).join('')}
             </select>
-            <input type="number" class="form-control prod-qty" data-idx="${i}" value="${line.qty_l||''}" placeholder="Литры" step="0.1" style="width:90px">
+            <select class="form-control prod-csize" data-idx="${i}" style="width:100px">
+              ${CONTAINER_SIZES.map(o => `<option value="${o.value}" ${o.value === line.container_size ? 'selected' : ''}>${o.label}</option>`).join('')}
+            </select>
+            ${isCustom ? `<input type="number" class="form-control prod-custom-size" data-idx="${i}" value="${line.custom_size||''}" placeholder="л" step="0.01" style="width:70px">` : ''}
+            <input type="number" class="form-control prod-qty-cnt" data-idx="${i}" value="${line.qty_containers||''}" placeholder="шт." step="1" min="1" style="width:75px">
+            <span class="text-muted" style="min-width:48px;font-size:12px;align-self:center">${qtyL > 0 ? `= ${qtyL.toFixed(2).replace(/\.?0+$/,'')} л` : '— л'}</span>
             ${!isGift ? `
-              <input type="number" class="form-control prod-price" data-idx="${i}" value="${line.price_per_l||''}" placeholder="₽/л" step="1" style="width:90px">
-              <span class="line-total text-muted" style="min-width:80px;text-align:right">${formatCurrency((parseFloat(line.qty_l)||0)*(parseFloat(line.price_per_l)||0), settings.currency)}</span>
-            ` : '<span class="text-muted" style="min-width:80px;font-size:0.85em">бесплатно</span>'}
+              <input type="number" class="form-control prod-price" data-idx="${i}" value="${line.price_per_l||''}" placeholder="₽/л" step="1" style="width:80px">
+              <span class="line-total text-muted" style="min-width:72px;text-align:right;font-size:12px">${subtotal > 0 ? formatCurrency(subtotal, settings.currency) : '—'}</span>
+            ` : ''}
             <button type="button" class="btn-remove-ingredient prod-remove" data-idx="${i}">🗑</button>
           </div>
         `;
@@ -230,7 +252,6 @@ function showSaleForm(pageContainer, saleType = 'sale') {
         sel.addEventListener('change', () => {
           const idx = parseInt(sel.dataset.idx);
           productLines[idx].batch_id = sel.value;
-          // Auto-fill default price
           const b = batches.find(b => b.id === sel.value);
           if (b?.sale_price_per_l && !productLines[idx].price_per_l) {
             productLines[idx].price_per_l = b.sale_price_per_l;
@@ -238,8 +259,17 @@ function showSaleForm(pageContainer, saleType = 'sale') {
           renderLines(overlay);
         });
       });
-      prodEl.querySelectorAll('.prod-qty').forEach(inp => {
-        inp.addEventListener('input', () => { productLines[parseInt(inp.dataset.idx)].qty_l = inp.value; renderLines(overlay); });
+      prodEl.querySelectorAll('.prod-csize').forEach(sel => {
+        sel.addEventListener('change', () => {
+          productLines[parseInt(sel.dataset.idx)].container_size = sel.value;
+          renderLines(overlay);
+        });
+      });
+      prodEl.querySelectorAll('.prod-custom-size').forEach(inp => {
+        inp.addEventListener('input', () => { productLines[parseInt(inp.dataset.idx)].custom_size = inp.value; renderLines(overlay); });
+      });
+      prodEl.querySelectorAll('.prod-qty-cnt').forEach(inp => {
+        inp.addEventListener('input', () => { productLines[parseInt(inp.dataset.idx)].qty_containers = inp.value; renderLines(overlay); });
       });
       prodEl.querySelectorAll('.prod-price').forEach(inp => {
         inp.addEventListener('input', () => { productLines[parseInt(inp.dataset.idx)].price_per_l = inp.value; renderLines(overlay); });
@@ -344,20 +374,24 @@ function showSaleForm(pageContainer, saleType = 'sale') {
         const data = collectForm(dlg.querySelector('#sale-form'));
         if (!isGift && !data.customer_id) { showToast('Выберите клиента', 'warning'); return; }
         if (!productLines.length) { showToast('Добавьте хотя бы одну партию', 'warning'); return; }
-        const hasEmptyQty = productLines.some(l => !(parseFloat(l.qty_l) > 0));
-        if (hasEmptyQty) { showToast('Укажите количество литров', 'warning'); return; }
+        const hasEmptyQty = productLines.some(l => !(lineQtyL(l) > 0));
+        if (hasEmptyQty) { showToast('Укажите количество штук', 'warning'); return; }
 
         const total = calcTotal();
         const items = [
           ...productLines.map(l => {
             const b = batches.find(b => b.id === l.batch_id);
+            const qtyL = lineQtyL(l);
+            const containerSize = l.container_size === 'custom' ? parseFloat(l.custom_size) : parseFloat(l.container_size);
             return {
               type: 'product',
               batch_id: l.batch_id,
               name: b?.name || '?',
-              qty_l: parseFloat(l.qty_l) || 0,
+              container_size: containerSize || 0,
+              qty_containers: parseFloat(l.qty_containers) || 0,
+              qty_l: qtyL,
               price_per_l: isGift ? 0 : (parseFloat(l.price_per_l) || 0),
-              subtotal: isGift ? 0 : (parseFloat(l.qty_l)||0) * (parseFloat(l.price_per_l)||0),
+              subtotal: isGift ? 0 : qtyL * (parseFloat(l.price_per_l) || 0),
             };
           }),
           ...packLines.map(l => {
@@ -398,8 +432,13 @@ function showSaleForm(pageContainer, saleType = 'sale') {
 
   overlay.querySelector('#btn-add-prod')?.addEventListener('click', () => {
     const firstBatch = packBatches[0];
-    const defaultPrice = firstBatch?.sale_price_per_l || '';
-    productLines.push({ batch_id: firstBatch?.id || '', qty_l: '', price_per_l: defaultPrice });
+    productLines.push({
+      batch_id: firstBatch?.id || '',
+      container_size: '0.44',
+      custom_size: '',
+      qty_containers: '',
+      price_per_l: firstBatch?.sale_price_per_l || '',
+    });
     renderLines(overlay);
   });
 
@@ -522,12 +561,17 @@ function showSaleDetail(sale, pageContainer) {
     const prodItems = items.filter(i => i.type === 'product');
     const packItems = items.filter(i => i.type === 'packaging');
     const rows = [
-      ...prodItems.map(i => `<tr>
-        <td>${escHtml(i.name)}</td>
-        <td>${i.qty_l} л</td>
-        <td>${sale.sale_type === 'gift' ? '—' : formatCurrency(i.price_per_l, settings.currency) + '/л'}</td>
-        <td>${sale.sale_type === 'gift' ? '—' : formatCurrency(i.subtotal, settings.currency)}</td>
-      </tr>`),
+      ...prodItems.map(i => {
+        const containerStr = i.qty_containers
+          ? `${i.qty_containers} × ${i.container_size} л`
+          : `${i.qty_l} л`;
+        return `<tr>
+          <td>${escHtml(i.name)}</td>
+          <td>${containerStr} <span class="text-muted" style="font-size:0.85em">(${i.qty_l} л)</span></td>
+          <td>${sale.sale_type === 'gift' ? '—' : formatCurrency(i.price_per_l, settings.currency) + '/л'}</td>
+          <td>${sale.sale_type === 'gift' ? '—' : formatCurrency(i.subtotal, settings.currency)}</td>
+        </tr>`;
+      }),
       ...packItems.map(i => `<tr>
         <td><span class="text-muted" style="font-size:0.85em">уп.</span> ${escHtml(i.name)}</td>
         <td>${i.qty} шт.</td>

@@ -55,6 +55,12 @@ function _render(container) {
     { label: t('brew_date'), render: r => formatDate(r.brew_date) },
     { label: 'ABV', render: r => r.abv ? `${r.abv}%` : (r.og && r.fg ? `${calcABV(r.og, r.fg)}%` : '—') },
     { label: 'Объём', render: r => r.packaged_l ? `${r.packaged_l} л` : r.to_fermenter_l ? `${r.to_fermenter_l} л` : '—' },
+    { label: 'Остаток', render: r => {
+      if (!r.packaged_l) return '—';
+      const { balance } = calcBatchBalance(r);
+      const color = balance <= 0 ? 'var(--text-muted)' : balance < parseFloat(r.packaged_l) * 0.2 ? 'var(--warning)' : 'var(--success)';
+      return `<span style="color:${color};font-weight:600">${balance.toFixed(1)} л</span>`;
+    }},
     { label: 'COGS', render: r => {
       if (r.cogs_snapshot) {
         try {
