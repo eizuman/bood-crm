@@ -9,16 +9,20 @@ import t from '../i18n.js';
 let batches = [];
 let components = [];
 let inventory = [];
+let sales = [];
+let customers = [];
 let settings = {};
 let filterStatus = 'all';
 
 export async function renderBatches(container) {
   showLoading(container);
   try {
-    [batches, components, inventory, settings] = await Promise.all([
+    [batches, components, inventory, sales, customers, settings] = await Promise.all([
       getRows('Batches'),
       getRows('Components'),
       getRows('Inventory'),
+      getRows('Sales'),
+      getRows('Customers'),
       getSettings(),
     ]);
     _render(container);
@@ -89,7 +93,6 @@ function showBatchDetail(batch, pageContainer) {
         { id: 'brewday', label: 'День варки' },
         { id: 'fermentation', label: 'Брожение' },
         { id: 'packaging', label: 'Упаковка' },
-        { id: 'posting', label: 'Проводки' },
         { id: 'summary', label: 'Итог' },
       ]
     : [
@@ -99,7 +102,6 @@ function showBatchDetail(batch, pageContainer) {
         { id: 'distill', label: 'Перегон' },
         { id: 'aging', label: 'Выдержка' },
         { id: 'packaging', label: 'Розлив' },
-        { id: 'posting', label: 'Проводки' },
         { id: 'summary', label: 'Итог' },
       ];
 
@@ -127,16 +129,15 @@ function showBatchDetail(batch, pageContainer) {
 
   function renderBatchTab() {
     switch (activeTab) {
-      case 'overview': renderOverviewTab(tabContent, editedBatch); break;
-      case 'plan': renderPlanTab(tabContent, editedBatch); break;
-      case 'brewday': renderBrewDayTab(tabContent, editedBatch); break;
-      case 'braga': renderBragaTab(tabContent, editedBatch); break;
-      case 'distill': renderDistillTab(tabContent, editedBatch); break;
-      case 'fermentation': renderFermentTab(tabContent, editedBatch); break;
-      case 'aging': renderAgingTab(tabContent, editedBatch); break;
-      case 'packaging': renderPackagingTab(tabContent, editedBatch); break;
-      case 'posting': renderPostingTab(tabContent, editedBatch, pageContainer, overlay); break;
-      case 'summary': renderSummaryTab(tabContent, editedBatch); break;
+      case 'overview':    renderOverviewTab(tabContent, editedBatch, pageContainer); break;
+      case 'plan':        renderPlanTab(tabContent, editedBatch); break;
+      case 'brewday':     renderBrewDayTab(tabContent, editedBatch, pageContainer); break;
+      case 'braga':       renderBragaTab(tabContent, editedBatch); break;
+      case 'distill':     renderDistillTab(tabContent, editedBatch); break;
+      case 'fermentation':renderFermentTab(tabContent, editedBatch); break;
+      case 'aging':       renderAgingTab(tabContent, editedBatch); break;
+      case 'packaging':   renderPackagingTab(tabContent, editedBatch, pageContainer); break;
+      case 'summary':     renderSummaryTab(tabContent, editedBatch); break;
     }
     // Sync fields; auto-convert Brix → SG for og/fg inputs
     tabContent.querySelectorAll('[name]').forEach(el => {
@@ -163,9 +164,20 @@ function showBatchDetail(batch, pageContainer) {
   }
 }
 
-function renderOverviewTab(container, batch) {
+function renderOverviewTab(container, batch, pageContainer) {
   const snapshot = batch.recipe_snapshot ? JSON.parse(batch.recipe_snapshot) : {};
   const recipe = snapshot.recipe || {};
+  const balance = calcBatchBalance(batch);
+
+  // Sales that include this batch
+  const batchSales = sales
+    .filter(s => s.status === 'posted' && s.items)
+    .filter(s => {
+      try { return JSON.parse(s.items).some(i => i.type === 'product' && i.batch_id === batch.id); }
+      catch { return false; }
+    })
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
   container.innerHTML = `
     <div class="form-grid">
       ${formField('Название партии', `<input type="text" name="name" class="form-control" value="${escHtml(batch.name)}">`)}
@@ -178,7 +190,50 @@ function renderOverviewTab(container, batch) {
       </div>
       ${recipe.name ? `<div class="info-block"><strong>Рецепт:</strong> ${escHtml(recipe.name)} — ${escHtml(recipe.style||'')} | ${recipe.batch_size_l||'?'} л | OG: ${recipe.og_target||'?'}</div>` : ''}
     </div>
+    ${batch.packaged_l ? `
+    <div class="section-card" style="margin-top:16px">
+      <div class="section-card-header"><h4>Баланс литров</h4></div>
+      <div class="section-card-body">
+        <div class="liter-balance-grid">
+          <div class="liter-kpi"><span class="liter-kpi-label">Упаковано</span><span class="liter-kpi-value">${balance.packaged} л</span></div>
+          <div class="liter-kpi"><span class="liter-kpi-label">Продано</span><span class="liter-kpi-value" style="color:var(--success)">${balance.sold.toFixed(1)} л</span></div>
+          <div class="liter-kpi"><span class="liter-kpi-label">Списано</span><span class="liter-kpi-value">${balance.writtenOff.toFixed(1)} л</span></div>
+          <div class="liter-kpi liter-kpi-balance"><span class="liter-kpi-label">Остаток</span><span class="liter-kpi-value">${balance.balance.toFixed(1)} л</span></div>
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn btn-secondary btn-sm" id="btn-writeoff">✗ Списать остатки</button>
+        </div>
+      </div>
+    </div>
+    ${batchSales.length ? `
+    <div class="section-card" style="margin-top:12px">
+      <div class="section-card-header"><h4>Продажи</h4></div>
+      <div class="section-card-body p-0">
+        <table class="data-table">
+          <thead><tr><th>Дата</th><th>Клиент</th><th>Литры</th><th>Сумма</th></tr></thead>
+          <tbody>
+            ${batchSales.map(s => {
+              const items = JSON.parse(s.items);
+              const liters = items.filter(i => i.type === 'product' && i.batch_id === batch.id)
+                .reduce((sum, i) => sum + (parseFloat(i.qty_l)||0), 0);
+              return `<tr class="batch-sale-row" data-id="${escHtml(s.id)}">
+                <td>${formatDate(s.created_at)}</td>
+                <td>${escHtml(customers.find(c => c.id === s.customer_id)?.name || (s.sale_type === 'gift' ? '🎁 Подарок' : '—'))}</td>
+                <td>${liters.toFixed(1)} л</td>
+                <td>${formatCurrency(s.total_amount, settings.currency)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    ` : ''}
+    ` : ''}
   `;
+
+  container.querySelector('#btn-writeoff')?.addEventListener('click', () => {
+    showWriteOffDialog(batch, pageContainer);
+  });
 }
 
 function renderPlanTab(container, batch) {
@@ -216,7 +271,12 @@ function renderPlanTab(container, batch) {
   `;
 }
 
-function renderBrewDayTab(container, batch) {
+function renderBrewDayTab(container, batch, pageContainer) {
+  const brewPosted = batch.brew_posted === 'TRUE';
+  const snapshot = batch.recipe_snapshot ? JSON.parse(batch.recipe_snapshot) : {};
+  const ingredients = snapshot.ingredients || [];
+  const isBeer = batch.type === 'beer';
+
   container.innerHTML = `
     <div class="form-grid">
       <div class="form-row-3">
@@ -224,10 +284,55 @@ function renderBrewDayTab(container, batch) {
         ${formField('В ферментёр (л)', `<input type="number" name="to_fermenter_l" class="form-control" value="${escHtml(batch.to_fermenter_l||'')}" step="0.1">`)}
         ${formField('Потреблено кВт·ч', `<input type="number" name="kwh_used" class="form-control" value="${escHtml(batch.kwh_used||'')}" step="0.1">`)}
       </div>
-      ${formField('Часов труда', `<input type="number" name="labor_hours" class="form-control" value="${escHtml(batch.labor_hours||'')}" step="0.5">`)}
-      ${formField('Заметки дня варки', `<textarea name="brew_notes" class="form-control" rows="5">${escHtml(batch.brew_notes||'')}</textarea>`)}
+      ${formField('Часов труда (варка)', `<input type="number" name="labor_hours" class="form-control" value="${escHtml(batch.labor_hours||'')}" step="0.5">`)}
+      ${formField('Заметки дня варки', `<textarea name="brew_notes" class="form-control" rows="4">${escHtml(batch.brew_notes||'')}</textarea>`)}
+    </div>
+    <div class="section-card" style="margin-top:16px">
+      <div class="section-card-header">
+        <h4>${isBeer ? 'Проводка варки' : 'Проводка браги'}</h4>
+        <span class="${brewPosted ? 'badge-success' : 'badge-muted'}">${brewPosted ? '✓ Проведено' : '○ Не проведено'}</span>
+      </div>
+      <div class="section-card-body">
+        <div class="posting-actions">
+          <button class="btn btn-primary${brewPosted ? ' disabled' : ''}" id="btn-post-brew" ${brewPosted ? 'disabled' : ''}>
+            ${isBeer ? t('post_brew') : 'Провести брагу'}
+          </button>
+          ${brewPosted ? `<button class="btn btn-secondary" id="btn-undo-brew">↩ ${t('undo')}</button>` : ''}
+        </div>
+        ${brewPosted ? `<p class="text-muted text-sm" style="margin-top:8px">Проведено: ${batch.brew_posted_at ? formatDate(batch.brew_posted_at) : '?'}</p>` : ''}
+      </div>
     </div>
   `;
+
+  container.querySelector('#btn-post-brew')?.addEventListener('click', () => {
+    if (brewPosted) return;
+    const brewIngredients = ingredients.filter(i =>
+      ['mash','boil','whirlpool','fermentation','dry_hop','wash','distillation'].includes(i.stage_key)
+    );
+    showBrewPostDialog(batch, brewIngredients, isBeer, pageContainer);
+  });
+
+  container.querySelector('#btn-undo-brew')?.addEventListener('click', () => {
+    showConfirm(t('confirm_undo'), '', async () => {
+      try {
+        const ts = now();
+        const origMovements = inventory.filter(i => i.ref_id === batch.id && i.movement_type === (isBeer ? 'brew_consume' : 'distill_consume'));
+        const reverseRows = origMovements.map(m => ({
+          id: genId(), component_id: m.component_id,
+          qty_delta: String(-parseFloat(m.qty_delta)),
+          movement_type: 'adjustment', ref_type: 'undo_batch', ref_id: batch.id,
+          unit_cost: m.unit_cost, notes: `Undo: ${batch.name}`, created_at: ts,
+        }));
+        if (reverseRows.length) await appendRows('Inventory', reverseRows);
+        batch.brew_posted = 'FALSE';
+        batch.brew_posted_at = '';
+        await updateRow('Batches', batch.id, { ...batch });
+        showToast('Проводка варки отменена');
+        closeModal();
+        await renderBatches(pageContainer);
+      } catch (e) { showToast(e.message, 'error'); }
+    });
+  });
 }
 
 function renderBragaTab(container, batch) {
@@ -278,150 +383,115 @@ function renderAgingTab(container, batch) {
   `;
 }
 
-function renderPackagingTab(container, batch) {
-  container.innerHTML = `
-    <div class="form-grid">
-      ${formField('Упаковано (л)', `<input type="number" name="packaged_l" class="form-control" value="${escHtml(batch.packaged_l||'')}" step="0.1">`)}
-      ${formField('Дата упаковки', `<input type="date" name="package_date" class="form-control" value="${batch.package_date?.slice?.(0,10)||''}">`)}
-      ${formField('Часов труда (уп.)', `<input type="number" name="labor_hours" class="form-control" value="${escHtml(batch.labor_hours||'')}" step="0.5">`)}
-      ${formField('Заметки упаковки', `<textarea name="package_notes" class="form-control" rows="6">${escHtml(batch.package_notes||'')}</textarea>`)}
-    </div>
-  `;
-}
-
-function renderPostingTab(container, batch, pageContainer, overlay) {
-  const brewPosted = batch.brew_posted === 'TRUE';
+function renderPackagingTab(container, batch, pageContainer) {
   const packPosted = batch.packaging_posted === 'TRUE';
   const snapshot = batch.recipe_snapshot ? JSON.parse(batch.recipe_snapshot) : {};
   const ingredients = snapshot.ingredients || [];
   const isBeer = batch.type === 'beer';
+  const packIngList = ingredients.filter(i => i.stage_key === 'packaging');
 
   container.innerHTML = `
-    <div class="posting-sections">
-      <div class="section-card">
-        <div class="section-card-header">
-          <h4>${isBeer ? 'Проводка варки' : 'Проводка браги'}</h4>
-          <span class="${brewPosted ? 'badge-success' : 'badge-muted'}">${brewPosted ? '✓ Проведено' : '○ Не проведено'}</span>
-        </div>
-        <div class="section-card-body">
-          ${ingredients.filter(i => ['mash','boil','whirlpool','fermentation','dry_hop','wash','distillation'].includes(i.stage_key)).map(ing => {
-            const comp = components.find(c => c.id === ing.component_id);
-            return `<div class="posting-row">
-              <span>${escHtml(comp?.name||'?')}</span>
-              <span>${escHtml(ing.qty||'?')} ${escHtml(comp?.unit||'')}</span>
-              <span class="text-muted">${escHtml(ing.stage_key)}</span>
-            </div>`;
-          }).join('') || '<p class="text-muted">Нет ингредиентов в рецепте</p>'}
-          <div class="posting-actions">
-            <button class="btn btn-primary ${brewPosted ? 'disabled' : ''}" id="btn-post-brew" ${brewPosted ? 'disabled' : ''}>
-              ${isBeer ? t('post_brew') : 'Провести брагу'}
-            </button>
-            ${brewPosted ? `<button class="btn btn-secondary" id="btn-undo-brew">↩ ${t('undo')}</button>` : ''}
-          </div>
-          ${brewPosted ? `<p class="text-muted text-sm">Проведено: ${batch.brew_posted_at ? formatDate(batch.brew_posted_at) : '?'}</p>` : ''}
-        </div>
+    <div class="form-grid">
+      <div class="form-row-2">
+        ${formField('Упаковано (л)', `<input type="number" name="packaged_l" class="form-control" value="${escHtml(batch.packaged_l||'')}" step="0.1">`)}
+        ${formField('Дата упаковки', `<input type="date" name="package_date" class="form-control" value="${batch.package_date?.slice?.(0,10)||''}">`)}
       </div>
-
-      <div class="section-card">
-        <div class="section-card-header">
-          <h4>${isBeer ? 'Проводка упаковки' : 'Проводка выхода дистиллята'}</h4>
-          <span class="${packPosted ? 'badge-success' : 'badge-muted'}">${packPosted ? '✓ Проведено' : '○ Не проведено'}</span>
+      <div class="form-row-2">
+        ${formField('Часов труда (уп.)', `<input type="number" name="packaging_labor_hours" class="form-control" value="${escHtml(batch.packaging_labor_hours||'')}" step="0.5">`)}
+        ${formField('Цена продажи (₽/л)', `<input type="number" name="sale_price_per_l" class="form-control" value="${escHtml(batch.sale_price_per_l||'')}" step="1" placeholder="Цена по умолчанию">`)}
+      </div>
+      ${formField('Заметки упаковки', `<textarea name="package_notes" class="form-control" rows="4">${escHtml(batch.package_notes||'')}</textarea>`)}
+    </div>
+    <div class="section-card" style="margin-top:16px">
+      <div class="section-card-header">
+        <h4>${isBeer ? 'Проводка упаковки' : 'Проводка выхода дистиллята'}</h4>
+        <span class="${packPosted ? 'badge-success' : 'badge-muted'}">${packPosted ? '✓ Проведено' : '○ Не проведено'}</span>
+      </div>
+      <div class="section-card-body">
+        ${packIngList.map(ing => {
+          const comp = components.find(c => c.id === ing.component_id);
+          return `<div class="posting-row"><span>${escHtml(comp?.name||'?')}</span><span>${escHtml(ing.qty||'?')} ${escHtml(comp?.unit||'')}</span></div>`;
+        }).join('') || '<p class="text-muted">Нет упаковочных материалов в рецепте</p>'}
+        <div class="posting-actions" style="margin-top:12px">
+          <label class="checkbox-label" style="margin-bottom:10px">
+            <input type="checkbox" id="chk-cogs-catalog">
+            Себестоимость по каталогу (без списания со склада)
+          </label>
+          <button class="btn btn-primary${packPosted ? ' disabled' : ''}" id="btn-post-packaging" ${packPosted ? 'disabled' : ''}>
+            ${isBeer ? t('post_packaging') : 'Провести выход дистиллята'}
+          </button>
+          ${packPosted ? `<button class="btn btn-secondary" id="btn-undo-packaging" style="margin-left:8px">↩ ${t('undo')}</button>` : ''}
         </div>
-        <div class="section-card-body">
-          ${ingredients.filter(i => i.stage_key === 'packaging').map(ing => {
-            const comp = components.find(c => c.id === ing.component_id);
-            return `<div class="posting-row"><span>${escHtml(comp?.name||'?')}</span><span>${escHtml(ing.qty||'?')} ${escHtml(comp?.unit||'')}</span></div>`;
-          }).join('') || '<p class="text-muted">Нет упаковочных материалов</p>'}
-          <div class="posting-actions">
-            <button class="btn btn-primary ${packPosted ? 'disabled' : ''}" id="btn-post-packaging" ${packPosted ? 'disabled' : ''}>
-              ${isBeer ? t('post_packaging') : 'Провести выход дистиллята'}
-            </button>
-            ${packPosted ? `<button class="btn btn-secondary" id="btn-undo-packaging">↩ ${t('undo')}</button>` : ''}
-          </div>
-        </div>
+        ${packPosted ? `<p class="text-muted text-sm" style="margin-top:8px">Проведено: ${batch.packaging_posted_at ? formatDate(batch.packaging_posted_at) : '?'}</p>` : ''}
       </div>
     </div>
   `;
 
-  // Post Brew — show component selection dialog
-  container.querySelector('#btn-post-brew')?.addEventListener('click', () => {
-    if (brewPosted) return;
-    const brewIngredients = ingredients.filter(i =>
-      ['mash','boil','whirlpool','fermentation','dry_hop','wash','distillation'].includes(i.stage_key)
-    );
-    showBrewPostDialog(batch, brewIngredients, isBeer, pageContainer);
-  });
-
-  // Post Packaging
   container.querySelector('#btn-post-packaging')?.addEventListener('click', () => {
     if (packPosted) return;
-    showConfirm(t('confirm_post'), 'Упаковочные материалы будут списаны, готовый продукт оприходован', async () => {
-      try {
-        const ts = now();
-        const packIngredients = ingredients.filter(i => i.stage_key === 'packaging');
-        const consumeRows = packIngredients.map(ing => {
-          const comp = components.find(c => c.id === ing.component_id);
-          return {
-            id: genId(), component_id: ing.component_id,
-            qty_delta: String(-Math.abs(parseFloat(ing.qty)||0)),
-            movement_type: 'packaging_consume',
-            ref_type: 'batch', ref_id: batch.id,
-            unit_cost: comp?.cost_per_unit || '0',
-            notes: batch.name, created_at: ts,
-          };
-        });
+    const cogsByCatalog = container.querySelector('#chk-cogs-catalog')?.checked;
+    showConfirm(
+      t('confirm_post'),
+      cogsByCatalog
+        ? 'COGS будет рассчитан по каталожным ценам, движения склада не создаются'
+        : 'Упаковочные материалы будут списаны со склада',
+      async () => {
+        try {
+          const ts = now();
+          const consumeRows = [];
 
-        // Find the finished product component
-        const finishedType = isBeer ? 'finished_beer' : 'finished_spirit';
-        const finishedComp = components.find(c => c.type === finishedType && c.is_active !== 'FALSE');
+          if (!cogsByCatalog) {
+            packIngList.forEach(ing => {
+              const { price } = getEffectivePrice(ing.component_id, inventory, components);
+              const comp = components.find(c => c.id === ing.component_id);
+              consumeRows.push({
+                id: genId(), component_id: ing.component_id,
+                qty_delta: String(-Math.abs(parseFloat(ing.qty) || 0)),
+                movement_type: 'packaging_consume',
+                ref_type: 'batch', ref_id: batch.id,
+                unit_cost: price !== null ? String(price) : (comp?.cost_per_unit || '0'),
+                notes: batch.name, created_at: ts,
+              });
+            });
+          }
 
-        if (finishedComp && batch.packaged_l) {
-          const cogs = calcCOGS(batch, inventory, settings);
-          const costPerL = batch.packaged_l > 0 ? cogs.total / parseFloat(batch.packaged_l) : 0;
-          consumeRows.push({
-            id: genId(), component_id: finishedComp.id,
-            qty_delta: String(batch.packaged_l),
-            movement_type: 'packaging_produce',
-            ref_type: 'batch', ref_id: batch.id,
-            unit_cost: String(costPerL.toFixed(2)),
-            notes: batch.name, created_at: ts,
-          });
-        }
+          if (consumeRows.length) await appendRows('Inventory', consumeRows);
 
-        if (consumeRows.length) await appendRows('Inventory', consumeRows);
+          const cogs = cogsByCatalog
+            ? calcCogsByCatalog(batch, settings)
+            : calcCOGS(batch, inventory, settings);
 
-        const cogs = calcCOGS(batch, inventory, settings);
-        batch.packaging_posted = 'TRUE';
-        batch.packaging_posted_at = ts;
-        batch.cogs_snapshot = JSON.stringify(cogs);
-        batch.cogs_frozen_at = ts;
-        batch.status = 'done';
-        await updateRow('Batches', batch.id, { ...batch });
+          batch.packaging_posted = 'TRUE';
+          batch.packaging_posted_at = ts;
+          batch.cogs_snapshot = JSON.stringify(cogs);
+          batch.cogs_frozen_at = ts;
+          batch.status = 'done';
+          await updateRow('Batches', batch.id, { ...batch });
 
-        showToast(t('posted_ok'));
-        closeModal();
-        await renderBatches(pageContainer);
-      } catch (e) { showToast(e.message, 'error'); }
-    });
+          showToast(t('posted_ok'));
+          closeModal();
+          await renderBatches(pageContainer);
+        } catch (e) { showToast(e.message, 'error'); }
+      }
+    );
   });
 
-  // Undo Brew
-  container.querySelector('#btn-undo-brew')?.addEventListener('click', () => {
+  container.querySelector('#btn-undo-packaging')?.addEventListener('click', () => {
     showConfirm(t('confirm_undo'), '', async () => {
       try {
         const ts = now();
-        const origMovements = inventory.filter(i => i.ref_id === batch.id && i.movement_type === (isBeer ? 'brew_consume' : 'distill_consume'));
+        const origMovements = inventory.filter(i => i.ref_id === batch.id && i.movement_type === 'packaging_consume');
         const reverseRows = origMovements.map(m => ({
           id: genId(), component_id: m.component_id,
           qty_delta: String(-parseFloat(m.qty_delta)),
           movement_type: 'adjustment', ref_type: 'undo_batch', ref_id: batch.id,
-          unit_cost: m.unit_cost, notes: `Undo: ${batch.name}`, created_at: ts,
+          unit_cost: m.unit_cost, notes: `Undo pack: ${batch.name}`, created_at: ts,
         }));
         if (reverseRows.length) await appendRows('Inventory', reverseRows);
-        batch.brew_posted = 'FALSE';
-        batch.brew_posted_at = '';
+        batch.packaging_posted = 'FALSE';
+        batch.packaging_posted_at = '';
         await updateRow('Batches', batch.id, { ...batch });
-        showToast('Проводка варки отменена');
+        showToast('Проводка упаковки отменена');
         closeModal();
         await renderBatches(pageContainer);
       } catch (e) { showToast(e.message, 'error'); }
@@ -442,6 +512,83 @@ function normalizeGravity(val) {
   const v = parseFloat(val);
   if (!v) return val;
   return v > 2 ? String(brixToSg(v)) : val;
+}
+
+// Liter balance: packaged - sold - written_off
+function calcBatchBalance(batch) {
+  const writtenOff = inventory
+    .filter(m => m.ref_id === batch.id && m.movement_type === 'batch_writeoff')
+    .reduce((sum, m) => sum + Math.abs(parseFloat(m.qty_delta || 0)), 0);
+
+  const sold = sales
+    .filter(s => s.status === 'posted' && s.items)
+    .reduce((sum, s) => {
+      try {
+        return sum + JSON.parse(s.items)
+          .filter(i => i.type === 'product' && i.batch_id === batch.id)
+          .reduce((ss, i) => ss + (parseFloat(i.qty_l) || 0), 0);
+      } catch { return sum; }
+    }, 0);
+
+  const packaged = parseFloat(batch.packaged_l) || 0;
+  return { packaged, sold, writtenOff, balance: packaged - sold - writtenOff };
+}
+
+// COGS calculated from recipe snapshot + catalog prices (no inventory movements required)
+function calcCogsByCatalog(batch, settings) {
+  const snapshot = batch.recipe_snapshot ? JSON.parse(batch.recipe_snapshot) : {};
+  const ingredients = snapshot.ingredients || [];
+  const brewStages = ['mash','boil','whirlpool','fermentation','dry_hop','wash','distillation'];
+
+  const materials = ingredients
+    .filter(i => brewStages.includes(i.stage_key))
+    .reduce((sum, ing) => {
+      const { price } = getEffectivePrice(ing.component_id, [], components);
+      return sum + (parseFloat(ing.qty) || 0) * (price || 0);
+    }, 0);
+
+  const packaging = ingredients
+    .filter(i => i.stage_key === 'packaging')
+    .reduce((sum, ing) => {
+      const { price } = getEffectivePrice(ing.component_id, [], components);
+      return sum + (parseFloat(ing.qty) || 0) * (price || 0);
+    }, 0);
+
+  const energy = (parseFloat(batch.kwh_used) || 0) * parseFloat(settings.electricity_cost_kwh || 6.5);
+  const labor = ((parseFloat(batch.labor_hours) || 0) + (parseFloat(batch.packaging_labor_hours) || 0)) * parseFloat(settings.labor_rate_hour || 300);
+  return { materials, packaging, energy, labor, total: materials + packaging + energy + labor };
+}
+
+function showWriteOffDialog(batch, pageContainer) {
+  showModal('Списать остатки', `
+    <div class="form-grid">
+      ${formField('Объём списания (л)', `<input type="number" id="writeoff-vol" class="form-control" step="0.1" min="0.1" placeholder="0.0">`)}
+      ${formField('Причина', `<input type="text" id="writeoff-reason" class="form-control" placeholder="Потери, бой, дегустация...">`)}
+    </div>
+  `, [
+    { label: t('cancel'), class: 'btn-secondary', action: 'cancel', onClick: closeModal },
+    { label: 'Списать', class: 'btn-danger', action: 'save', onClick: async (dlg) => {
+      const vol = parseFloat(dlg.querySelector('#writeoff-vol').value);
+      const reason = dlg.querySelector('#writeoff-reason').value.trim();
+      if (!vol || vol <= 0) { showToast('Введите объём', 'error'); return; }
+      try {
+        await appendRow('Inventory', {
+          id: genId(),
+          component_id: batch.id,
+          qty_delta: String(-vol),
+          movement_type: 'batch_writeoff',
+          ref_type: 'batch',
+          ref_id: batch.id,
+          unit_cost: '0',
+          notes: reason || 'Списание остатков',
+          created_at: now(),
+        });
+        showToast('Списание проведено');
+        closeModal();
+        await renderBatches(pageContainer);
+      } catch (e) { showToast(e.message, 'error'); }
+    }},
+  ]);
 }
 
 function showBrewPostDialog(batch, brewIngredients, isBeer, pageContainer) {

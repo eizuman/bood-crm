@@ -127,7 +127,7 @@ export function calcCOGS(batch, inventoryMovements, settings) {
     .filter(m => m.movement_type === 'packaging_consume')
     .reduce((sum, m) => sum + Math.abs(parseFloat(m.qty_delta || 0) * parseFloat(m.unit_cost || 0)), 0);
   const energy = (parseFloat(batch.kwh_used) || 0) * parseFloat(settings.electricity_cost_kwh || 6.5);
-  const labor = (parseFloat(batch.labor_hours) || 0) * parseFloat(settings.labor_rate_hour || 300);
+  const labor = ((parseFloat(batch.labor_hours) || 0) + (parseFloat(batch.packaging_labor_hours) || 0)) * parseFloat(settings.labor_rate_hour || 300);
   const total = materials + packaging + energy + labor;
   return { materials, packaging, energy, labor, total };
 }

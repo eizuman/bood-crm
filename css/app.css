@@ -1127,6 +1127,47 @@ body.modal-open { overflow: hidden; }
   color: var(--text-secondary);
 }
 
+/* ── Liter Balance ─────────────────────────────────────────────────────────── */
+.liter-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.liter-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.liter-kpi-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.liter-kpi-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.liter-kpi-balance { border-color: var(--accent-amber); }
+.liter-kpi-balance .liter-kpi-value { color: var(--accent-amber); }
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .liter-balance-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* ── Posting ───────────────────────────────────────────────────────────────── */
 .posting-sections { display: flex; flex-direction: column; gap: 16px; }
 .posting-row {
@@ -1228,6 +1269,12 @@ body.modal-open { overflow: hidden; }
 .customer-info-fields { flex: 1; }
 .customer-info-fields p { margin-bottom: 6px; font-size: 13px; }
 .ledger-list { overflow-x: auto; }
+.sale-lines-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 32px;
+}
 .sale-line {
   display: flex;
   align-items: center;
