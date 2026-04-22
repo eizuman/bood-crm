@@ -247,6 +247,7 @@ button { cursor: pointer; font-family: inherit; }
 }
 .btn-danger:hover { background: #F4433620; }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-push-left { margin-right: auto; }
 .btn-xs { padding: 2px 8px; font-size: 11px; }
 .btn-lg { padding: 11px 24px; font-size: 15px; }
 
@@ -603,6 +604,7 @@ select.form-control {
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   gap: 8px;
   flex-shrink: 0;
 }

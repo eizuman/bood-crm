@@ -112,6 +112,16 @@ function showBatchDetail(batch, pageContainer) {
     `Партия: ${batch.name}`,
     `<div id="batch-tabs-nav"></div><div id="batch-tab-content" class="batch-detail-content"></div>`,
     [
+      { label: '🗑 Удалить', class: 'btn-danger btn-push-left', action: 'delete', onClick: () => {
+        showConfirm('Удалить партию?', 'Партия будет скрыта. Проводки и движения склада не удаляются.', async () => {
+          try {
+            await softDelete('Batches', batch.id);
+            showToast('Партия удалена');
+            closeModal();
+            await renderBatches(pageContainer);
+          } catch (e) { showToast(e.message, 'error'); }
+        });
+      }},
       { label: t('cancel'), class: 'btn-secondary', action: 'cancel', onClick: closeModal },
       { label: 'Сохранить', class: 'btn-primary', action: 'save', onClick: () => saveBatch() },
     ],
