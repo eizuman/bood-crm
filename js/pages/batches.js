@@ -1,5 +1,5 @@
 // Bood CRM — Batches Page (Beer & Distillation)
-import { getRows, appendRow, appendRows, updateRow, softDelete, genId, now, getSettings } from '../sheets.js';
+import { getRows, appendRow, appendRows, updateRow, softDelete, deleteRow, genId, now, getSettings } from '../sheets.js';
 import { calcCOGS, calcABV, calcOnHand, getEffectivePrice, formatCurrency, escHtml, formatDate } from '../utils.js';
 import { showModal, closeModal, showConfirm, showToast, showLoading, showError,
   renderTabs, renderTable, createStatusChip, createBatchTypeChip, pageHeader,
@@ -113,9 +113,9 @@ function showBatchDetail(batch, pageContainer) {
     `<div id="batch-tabs-nav"></div><div id="batch-tab-content" class="batch-detail-content"></div>`,
     [
       { label: '🗑 Удалить', class: 'btn-danger btn-push-left', action: 'delete', onClick: () => {
-        showConfirm('Удалить партию?', 'Партия будет скрыта. Проводки и движения склада не удаляются.', async () => {
+        showConfirm('Удалить партию?', 'Строка будет удалена из таблицы навсегда. Проводки и движения склада не удаляются.', async () => {
           try {
-            await softDelete('Batches', batch.id);
+            await deleteRow('Batches', batch.id);
             showToast('Партия удалена');
             closeModal();
             await renderBatches(pageContainer);
