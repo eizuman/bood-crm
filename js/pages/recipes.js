@@ -344,32 +344,36 @@ function showRecipeEditor(recipe, pageContainer) {
       const ings       = recipeIngredients.filter(i => stageKeys.includes(i.stage_key));
       const effVal     = washType === 'grain' ? efficiency : 100;
       const og         = calcWashOG(ings, components, effVal, vol);
-      display.textContent = og ? `≈ ${og}` : '≈ —';
+      display.textContent = og ? `≈ ${sgToBrix(og)} °Bx` : '≈ —';
       display.dataset.og  = og || '';
       recalcBragaStats();
     }
 
     function autoFillFG() {
-      const ogVal = parseFloat(tabContent.querySelector('[name=og_target]')?.value || recipeData.og_target);
-      if (!ogVal) return;
-      // find yeast in either fermentation or wash stage
+      const ogSg = parseFloat(recipeData.og_target);
+      if (!ogSg || ogSg <= 1) return;
       const yeastIng = recipeIngredients.find(i =>
         ['fermentation','wash'].includes(i.stage_key) &&
         components.find(c => c.id === i.component_id)?.type === 'yeast'
       );
       const att = parseFloat(components.find(c => c.id === yeastIng?.component_id)?.attenuation);
       if (!att) return;
-      const fg = +(1 + (ogVal - 1) * (1 - att / 100)).toFixed(3);
+      const fgSg = +(1 + (ogSg - 1) * (1 - att / 100)).toFixed(3);
       const fgInput = tabContent.querySelector('[name=fg_target]');
-      if (fgInput && !fgInput.value) { fgInput.value = String(fg); recipeData.fg_target = String(fg); isDirty = true; }
+      if (fgInput && !fgInput.value) {
+        fgInput.value = String(sgToBrix(fgSg));
+        recipeData.fg_target = String(fgSg);
+        isDirty = true;
+      }
       const hint = tabContent.querySelector('#wash-fg-hint');
       if (hint) hint.textContent = `≈ авто (${att}%)`;
       recalcBragaStats();
     }
 
     function recalcBragaStats() {
-      const og  = parseFloat(tabContent.querySelector('[name=og_target]')?.value  || recipeData.og_target)  || 0;
-      const fg  = parseFloat(tabContent.querySelector('[name=fg_target]')?.value  || recipeData.fg_target)  || 0;
+      // always read from recipeData which stores SG values
+      const og  = parseFloat(recipeData.og_target)  || 0;
+      const fg  = parseFloat(recipeData.fg_target)  || 0;
       const vol = parseFloat(tabContent.querySelector('[name=batch_size_l]')?.value || recipeData.batch_size_l) || 0;
       const abvEl = tabContent.querySelector('#wash-stat-abv');
       const asEl  = tabContent.querySelector('#wash-stat-as');
@@ -386,23 +390,32 @@ function showRecipeEditor(recipe, pageContainer) {
     }
 
     tabContent.querySelector('#btn-apply-wash-og')?.addEventListener('click', () => {
-      const og = tabContent.querySelector('#wash-og-calc')?.dataset.og;
-      if (!og) return;
+      const ogSg = tabContent.querySelector('#wash-og-calc')?.dataset.og;
+      if (!ogSg) return;
       const ogInput = tabContent.querySelector('[name=og_target]');
-      if (ogInput) { ogInput.value = og; recipeData.og_target = og; isDirty = true; }
+      if (ogInput) {
+        ogInput.value = String(sgToBrix(parseFloat(ogSg)));
+        recipeData.og_target = ogSg;
+        isDirty = true;
+      }
       autoFillFG();
       recalcBragaStats();
     });
-    tabContent.querySelector('[name=og_target]')?.addEventListener('input', () => {
-      recipeData.og_target = tabContent.querySelector('[name=og_target]').value;
-      autoFillFG();
-      recalcBragaStats();
-    });
-    tabContent.querySelector('[name=fg_target]')?.addEventListener('input', () => {
-      recipeData.fg_target = tabContent.querySelector('[name=fg_target]').value;
-      isDirty = true;
-      recalcBragaStats();
-    });
+    if (tabContent.querySelector('#wash-stat-abv')) {
+      // braga tab only — always °Bx input, store as SG
+      tabContent.querySelector('[name=og_target]')?.addEventListener('input', () => {
+        const raw = parseFloat(tabContent.querySelector('[name=og_target]').value);
+        if (!isNaN(raw)) recipeData.og_target = String(brixToSg(raw));
+        autoFillFG();
+        recalcBragaStats();
+      });
+      tabContent.querySelector('[name=fg_target]')?.addEventListener('input', () => {
+        const raw = parseFloat(tabContent.querySelector('[name=fg_target]').value);
+        if (!isNaN(raw)) recipeData.fg_target = String(brixToSg(raw));
+        isDirty = true;
+        recalcBragaStats();
+      });
+    }
     tabContent.querySelector('[name=system_efficiency]')?.addEventListener('input', () => {
       recipeData.system_efficiency = tabContent.querySelector('[name=system_efficiency]').value;
       isDirty = true;
@@ -1846,7 +1859,11 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
       </div>
     `;
   } else if (tab === 'braga') {
-    const washType = data.wash_type || 'sugar';
+    const washType   = data.wash_type || 'sugar';
+    const washOgSg   = data.og_target || '';
+    const washFgSg   = data.fg_target || '';
+    const washOgDisp = washOgSg ? String(sgToBrix(parseFloat(washOgSg))) : '';
+    const washFgDisp = washFgSg ? String(sgToBrix(parseFloat(washFgSg))) : '';
     if (washType === 'grain') {
       // ── Grain wash (whisky, bourbon) — full malt bill + mash schedule ──────
       const grains        = ingredients.filter(i => i.stage_key === 'mash' && ['malt','grain_distill','sugar','other'].includes(components.find(c=>c.id===i.component_id)?.type));
@@ -1879,21 +1896,21 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
                 </div>
                 <div class="form-row-2">
                   ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
-                  ${formField('КПД затора (%)', `<input type="number" name="system_efficiency" class="form-control" value="${escHtml(data.system_efficiency||'75')}" step="1" min="40" max="100">`)}
+                  ${formField('Экстрактивность (%)', `<input type="number" name="system_efficiency" class="form-control" value="${escHtml(data.system_efficiency||'75')}" step="1" min="40" max="100" placeholder="70–80">`, 'выход сахаров из засыпи')}
                 </div>
                 <div class="form-group">
-                  <label class="form-label">OG (SG)</label>
+                  <label class="form-label">OG браги <span style="color:var(--text-muted);font-weight:400;font-size:0.85em">°Bx</span></label>
                   <div style="display:flex;gap:6px;align-items:center">
-                    <input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.060" style="flex:1">
+                    <input type="number" name="og_target" class="form-control" value="${escHtml(washOgDisp)}" step="0.1" placeholder="15.0" style="flex:1">
                     <span id="wash-og-calc" style="font-size:11px;color:var(--text-muted);white-space:nowrap">≈ —</span>
-                    <button type="button" id="btn-apply-wash-og" class="btn btn-secondary" style="flex-shrink:0;padding:2px 8px;font-size:11px;height:28px">↑</button>
+                    <button type="button" id="btn-apply-wash-og" class="btn btn-secondary" style="flex-shrink:0;padding:2px 8px;font-size:11px;height:28px" title="Применить расчётное значение">↑</button>
                   </div>
-                  <div style="font-size:10px;color:var(--text-muted);margin-top:2px">расчёт из засыпи × КПД × объём</div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-top:2px">расчёт из засыпи × экстрактивность × объём</div>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">FG (SG)</label>
+                  <label class="form-label">FG браги <span style="color:var(--text-muted);font-weight:400;font-size:0.85em">°Bx</span></label>
                   <div style="display:flex;gap:6px;align-items:center">
-                    <input type="number" name="fg_target" class="form-control" value="${escHtml(data.fg_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.010" style="flex:1">
+                    <input type="number" name="fg_target" class="form-control" value="${escHtml(washFgDisp)}" step="0.1" placeholder="2.5" style="flex:1">
                     <span id="wash-fg-hint" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${currentYeastComp?.attenuation ? `≈ авто (${currentYeastComp.attenuation}%)` : ''}</span>
                   </div>
                 </div>
@@ -2013,18 +2030,18 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
           ${renderIngredientList(washItems, 'wash', ['grain_distill','sugar','fruit','additive','yeast','salt','other'])}
           <button type="button" class="btn btn-secondary btn-add-wash-ingredient">+ Добавить ингредиент</button>
           <div class="form-group">
-            <label class="form-label">OG (SG)</label>
+            <label class="form-label">OG браги <span style="color:var(--text-muted);font-weight:400;font-size:0.85em">°Bx</span></label>
             <div style="display:flex;gap:6px;align-items:center">
-              <input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.060" style="flex:1">
-              <span id="wash-og-calc" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${sugarOG ? `≈ ${sugarOG}` : '≈ —'}</span>
-              <button type="button" id="btn-apply-wash-og" class="btn btn-secondary" style="flex-shrink:0;padding:2px 8px;font-size:11px;height:28px">↑</button>
+              <input type="number" name="og_target" class="form-control" value="${escHtml(washOgDisp)}" step="0.1" placeholder="15.0" style="flex:1">
+              <span id="wash-og-calc" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${sugarOG ? `≈ ${sgToBrix(sugarOG)} °Bx` : '≈ —'}</span>
+              <button type="button" id="btn-apply-wash-og" class="btn btn-secondary" style="flex-shrink:0;padding:2px 8px;font-size:11px;height:28px" title="Применить расчётное значение">↑</button>
             </div>
             <div style="font-size:10px;color:var(--text-muted);margin-top:2px">расчёт из ингредиентов × объём (сахар — 100%)</div>
           </div>
           <div class="form-group">
-            <label class="form-label">FG (SG)</label>
+            <label class="form-label">FG браги <span style="color:var(--text-muted);font-weight:400;font-size:0.85em">°Bx</span></label>
             <div style="display:flex;gap:6px;align-items:center">
-              <input type="number" name="fg_target" class="form-control" value="${escHtml(data.fg_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.010" style="flex:1">
+              <input type="number" name="fg_target" class="form-control" value="${escHtml(washFgDisp)}" step="0.1" placeholder="2.5" style="flex:1">
               <span id="wash-fg-hint" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${sugarYeastComp?.attenuation ? `≈ авто (${sugarYeastComp.attenuation}%)` : ''}</span>
             </div>
           </div>
