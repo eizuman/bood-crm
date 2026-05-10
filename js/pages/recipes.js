@@ -313,12 +313,25 @@ function showRecipeEditor(recipe, pageContainer) {
     tabContent.querySelector('.btn-add-wash-ingredient')?.addEventListener('click', () => {
       addIngredient('wash', recipeIngredients, renderView);
     });
+    tabContent.querySelector('.btn-add-wash-ferment-additive')?.addEventListener('click', () => {
+      addIngredientFiltered('fermentation', recipeIngredients, renderView, ['additive','salt','other']);
+    });
     tabContent.querySelector('.btn-add-still-ingredient')?.addEventListener('click', () => {
       addIngredient('distillation', recipeIngredients, renderView);
     });
     tabContent.querySelector('.btn-add-aging-ingredient')?.addEventListener('click', () => {
       addIngredient('aging', recipeIngredients, renderView);
     });
+
+    // wash_type toggle → re-render braga tab immediately
+    const washTypeSel = tabContent.querySelector('[name=wash_type]');
+    if (washTypeSel) {
+      washTypeSel.addEventListener('change', () => {
+        recipeData.wash_type = washTypeSel.value;
+        isDirty = true;
+        renderView();
+      });
+    }
 
     // Remove ingredient — deferred: actual sheet deletion happens on Save
     tabContent.querySelectorAll('.btn-remove-ingredient').forEach(btn => {
@@ -1698,9 +1711,15 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
     container.innerHTML = `
       <div class="form-grid">
         ${formField('Название', `<input type="text" name="name" class="form-control" value="${escHtml(data.name||'')}">`, '', true)}
-        ${formField('Тип', selectInput('style', [
-          'Виски','Кальвадос','Самогон','Ректификат','Джин','Другое'
-        ].map(v=>({value:v,label:v})), data.style||''))}
+        <div class="form-row-2">
+          ${formField('Тип продукта', selectInput('style', [
+            'Виски','Кальвадос','Самогон','Ректификат','Джин','Другое'
+          ].map(v=>({value:v,label:v})), data.style||''))}
+          ${formField('Тип браги', selectInput('wash_type', [
+            {value:'sugar', label:'Сахарная / Фруктовая'},
+            {value:'grain', label:'Зерновая (Виски, Бурбон)'},
+          ], data.wash_type || 'sugar'))}
+        </div>
         ${formField('Описание', `<textarea name="description" class="form-control" rows="3">${escHtml(data.description||'')}</textarea>`)}
         <div class="form-row-3">
           ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
@@ -1715,18 +1734,132 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
       </div>
     `;
   } else if (tab === 'braga') {
-    const washItems = ingredients.filter(i => i.stage_key === 'wash' || i.stage_key === 'mash');
-    container.innerHTML = `
-      <div class="form-grid">
-        <h4>Ингредиенты браги</h4>
-        ${renderIngredientList(washItems, 'wash', ['grain_distill','sugar','fruit','additive','yeast','salt','other'])}
-        <button type="button" class="btn btn-secondary btn-add-wash-ingredient">+ Добавить ингредиент</button>
-        <div class="form-row-2">
-          ${formField('Температура брожения (°C)', `<input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'28')}" step="0.5">`)}
-          ${formField('Дней брожения', `<input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'7')}" step="1">`)}
+    const washType = data.wash_type || 'sugar';
+    if (washType === 'grain') {
+      // ── Grain wash (whisky, bourbon) — full malt bill + mash schedule ──────
+      const grains        = ingredients.filter(i => i.stage_key === 'mash' && ['malt','grain_distill','sugar','other'].includes(components.find(c=>c.id===i.component_id)?.type));
+      const mashAdditives = ingredients.filter(i => i.stage_key === 'mash' && !grains.find(g=>g.id===i.id));
+      const fermentItems  = ingredients.filter(i => i.stage_key === 'fermentation' || i.stage_key === 'wash');
+      const currentYeast     = fermentItems.find(i => components.find(c=>c.id===i.component_id)?.type === 'yeast');
+      const currentYeastComp = currentYeast ? components.find(c=>c.id===currentYeast.component_id) : null;
+      const yeastComps       = components.filter(c => c.type === 'yeast' && c.is_active !== 'FALSE');
+      const totalGrainG      = grains.reduce((s,i) => s + (parseFloat(i.qty)||0), 0);
+
+      container.innerHTML = `
+        <div class="recipe-editor-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+
+        <!-- Col 1: Параметры -->
+        <div class="recipe-editor-col">
+          <div class="section-card">
+            <div class="section-card-header"><h4>📐 Параметры</h4></div>
+            <div class="section-card-body">
+              <div class="form-grid">
+                <div class="form-row-2">
+                  ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
+                  ${formField('OG цель (SG)', `<input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.060">`)}
+                </div>
+                <div class="form-row-3">
+                  ${formField('Вода затор (л)', `<input type="number" name="water_mash_l" class="form-control" value="${escHtml(data.water_mash_l||'')}" step="0.5">`)}
+                  ${formField('Промывка (л)', `<input type="number" name="water_sparge_l" class="form-control" value="${escHtml(data.water_sparge_l||'')}" step="0.5">`)}
+                  ${formField('Итого воды (л)', `<input type="number" name="water_total_l" class="form-control" value="${escHtml(data.water_total_l||'')}" step="0.5" placeholder="авто">`)}
+                </div>
+                <div class="form-row-2">
+                  ${formField('pH цель', `<input type="number" name="ph_target" class="form-control" value="${escHtml(data.ph_target||'')}" step="0.1" min="4" max="8" placeholder="5.4">`)}
+                  ${formField('Гидромодуль', `<input type="number" name="hydromodule" class="form-control" value="${escHtml(data.hydromodule||'')}" step="0.1" placeholder="3.5">`)}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-header"><h4>🧬 Брожение</h4></div>
+            <div class="section-card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Дрожжи</label>
+                  <div style="display:flex;gap:4px;align-items:center">
+                    <select class="form-control" id="yeast-select" style="flex:1;min-width:0">
+                      <option value="">— не выбраны —</option>
+                      ${yeastComps.map(c=>`<option value="${escHtml(c.id)}" ${currentYeastComp?.id===c.id?'selected':''}>${escHtml(c.name)}${c.attenuation?` (${c.attenuation}%)`:''}</option>`).join('')}
+                    </select>
+                    <input type="number" id="yeast-qty" class="form-control" style="width:68px;flex-shrink:0"
+                      value="${escHtml(currentYeast?.qty||'')}" placeholder="г" step="0.5" min="0">
+                    <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">г</span>
+                  </div>
+                </div>
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label class="form-label">Температура (°C)${currentYeastComp?.ferment_temp_min&&currentYeastComp?.ferment_temp_max?`<span class="text-muted" style="font-weight:400;margin-left:4px">${currentYeastComp.ferment_temp_min}–${currentYeastComp.ferment_temp_max}°C</span>`:''}</label>
+                    <input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'28')}" step="0.5">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Дней брожения${currentYeastComp?.ferment_days_typical?`<span class="text-muted" style="font-weight:400;margin-left:4px">~${currentYeastComp.ferment_days_typical}</span>`:''}</label>
+                    <input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'7')}" step="1">
+                  </div>
+                </div>
+                <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin:2px 0">Добавки к брожению</div>
+                ${renderIngredientList(fermentItems.filter(i=>{ const c=components.find(c=>c.id===i.component_id); return !c||c.type!=='yeast'; }), 'fermentation', ['additive','salt','other'])}
+                <button type="button" class="btn btn-secondary btn-add-wash-ferment-additive">+ Добавка</button>
+              </div>
+            </div>
+          </div>
+        </div><!-- /col 1 -->
+
+        <!-- Col 2: Засыпь + Затирание -->
+        <div class="recipe-editor-col">
+          <div class="section-card" data-section="grain">
+            <div class="section-card-header">
+              <h4>🌾 Засыпь${totalGrainG>0?`<span class="text-muted" style="font-weight:400;margin-left:6px">${(totalGrainG/1000).toFixed(2)} кг</span>`:''}</h4>
+            </div>
+            <div class="section-card-body">
+              <div class="form-grid">
+                <div class="ing-table ing-grain-table">
+                  <div class="ing-table-head">
+                    <span>Солод / Засыпь</span>
+                    <span class="ing-th-c">EBC</span>
+                    <span class="ing-th-c">г</span>
+                    <span></span>
+                    <span class="ing-th-r">%</span>
+                    <span></span>
+                  </div>
+                  ${renderGrainRows(grains, totalGrainG)}
+                  ${mashAdditives.length>0 ? renderIngredientList(mashAdditives,'mash',['additive','sugar','other'],'grain') : ''}
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button type="button" class="btn btn-secondary btn-add-grain">+ Солод</button>
+                  <button type="button" class="btn btn-secondary btn-add-mash-additive">+ Добавка</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="section-card" data-section="mash">
+            <div class="section-card-header"><h4>🌡 Затирание</h4></div>
+            <div class="section-card-body">
+              <div class="form-grid">
+                <div id="mash-rests-list">${renderMashBlocks(mashRests)}</div>
+                <button type="button" class="btn btn-secondary btn-add-mash-rest">+ Добавить паузу</button>
+              </div>
+            </div>
+          </div>
+        </div><!-- /col 2 -->
+
+        </div><!-- /.recipe-editor-grid -->
+      `;
+    } else {
+      // ── Sugar / Fruit wash — simple flat list ─────────────────────────────
+      const washItems = ingredients.filter(i => i.stage_key === 'wash' || i.stage_key === 'mash');
+      container.innerHTML = `
+        <div class="form-grid">
+          <h4>Ингредиенты браги</h4>
+          ${renderIngredientList(washItems, 'wash', ['grain_distill','sugar','fruit','additive','yeast','salt','other'])}
+          <button type="button" class="btn btn-secondary btn-add-wash-ingredient">+ Добавить ингредиент</button>
+          <div class="form-row-3">
+            ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
+            ${formField('Температура брожения (°C)', `<input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'28')}" step="0.5">`)}
+            ${formField('Дней брожения', `<input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'7')}" step="1">`)}
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    }
   } else if (tab === 'distillation') {
     const stillItems = ingredients.filter(i => i.stage_key === 'distillation');
     container.innerHTML = `
