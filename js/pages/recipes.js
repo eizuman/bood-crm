@@ -369,27 +369,22 @@ function showRecipeEditor(recipe, pageContainer) {
           }
         }
 
-        // Update EBC chip for grain rows
+        // Update EBC chip for grain rows — updates the existing .ing-cell-ebc span in-place
         if (row) {
           const newEbc = comp?.ebc ? parseFloat(comp.ebc) : 0;
-          let ebcChip  = row.querySelector('.grain-ebc-chip');
-          if (newEbc > 0) {
-            const hex = ebcToHex(newEbc);
-            if (ebcChip) {
-              ebcChip.textContent = `${newEbc}EBC`;
-              ebcChip.style.background   = `${hex}22`;
-              ebcChip.style.color        = hex;
-              ebcChip.style.borderColor  = `${hex}55`;
+          const ebcChip = row.querySelector('.ing-cell-ebc');
+          if (ebcChip) {
+            if (newEbc > 0) {
+              const hex = ebcToHex(newEbc);
+              ebcChip.textContent      = `${newEbc} EBC`;
+              ebcChip.style.background = `${hex}22`;
+              ebcChip.style.color      = hex;
+              ebcChip.style.border     = `1px solid ${hex}55`;
+              ebcChip.style.opacity    = '';
             } else {
-              ebcChip = document.createElement('span');
-              ebcChip.className  = 'grain-ebc-chip';
-              ebcChip.style.cssText = `background:${hex}22;color:${hex};border:1px solid ${hex}55;border-radius:4px;padding:1px 5px;font-size:10px;white-space:nowrap;flex-shrink:0`;
-              ebcChip.textContent = `${newEbc}EBC`;
-              const removeBtn = row.querySelector('.btn-remove-ingredient');
-              if (removeBtn) removeBtn.insertAdjacentElement('beforebegin', ebcChip);
+              ebcChip.textContent = '';
+              ebcChip.style.opacity = '0';
             }
-          } else if (ebcChip) {
-            ebcChip.remove();
           }
         }
 
