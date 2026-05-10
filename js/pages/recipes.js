@@ -333,6 +333,35 @@ function showRecipeEditor(recipe, pageContainer) {
       });
     }
 
+    // ── Live OG calculator for spirit braga tabs ───────────────────────────
+    function recalcWashOG() {
+      const display = tabContent.querySelector('#wash-og-calc');
+      if (!display) return;
+      const washType   = recipeData.wash_type || 'sugar';
+      const efficiency = tabContent.querySelector('[name=system_efficiency]')?.value || recipeData.system_efficiency || 75;
+      const vol        = parseFloat(tabContent.querySelector('[name=batch_size_l]')?.value || recipeData.batch_size_l) || 0;
+      const stageKeys  = washType === 'grain' ? ['mash'] : ['wash', 'mash'];
+      const ings       = recipeIngredients.filter(i => stageKeys.includes(i.stage_key));
+      const effVal     = washType === 'grain' ? efficiency : 100;
+      const og         = calcWashOG(ings, components, effVal, vol);
+      display.textContent = og ? `≈ ${og}` : '≈ —';
+      display.dataset.og  = og || '';
+    }
+
+    tabContent.querySelector('#btn-apply-wash-og')?.addEventListener('click', () => {
+      const og = tabContent.querySelector('#wash-og-calc')?.dataset.og;
+      if (!og) return;
+      const ogInput = tabContent.querySelector('[name=og_target]');
+      if (ogInput) { ogInput.value = og; recipeData.og_target = og; isDirty = true; }
+    });
+    tabContent.querySelector('[name=system_efficiency]')?.addEventListener('input', () => {
+      recipeData.system_efficiency = tabContent.querySelector('[name=system_efficiency]').value;
+      isDirty = true;
+      recalcWashOG();
+    });
+    tabContent.querySelector('[name=batch_size_l]')?.addEventListener('input', recalcWashOG);
+    recalcWashOG();
+
     // Remove ingredient — deferred: actual sheet deletion happens on Save
     tabContent.querySelectorAll('.btn-remove-ingredient').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -462,7 +491,11 @@ function showRecipeEditor(recipe, pageContainer) {
       input.addEventListener('change', () => {
         const ingId = input.dataset.id;
         const ing = recipeIngredients.find(i => i.id === ingId);
-        if (ing) { ing.qty = input.value; if (['boil','whirlpool'].includes(ing.stage_key)) recalcIBU(); }
+        if (ing) {
+          ing.qty = input.value;
+          if (['boil','whirlpool'].includes(ing.stage_key)) recalcIBU();
+          if (['mash','wash'].includes(ing.stage_key)) recalcWashOG?.();
+        }
         isDirty = true;
       });
     });
@@ -946,6 +979,31 @@ function showRecipeEditor(recipe, pageContainer) {
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('save'); }
     }
   }
+}
+
+// ─── OG calculator (wash / mash) ─────────────────────────────────────────────
+// Returns estimated SG or null if volume is unknown.
+// extract constants (gravity pts per kg at 100%):
+//   malt/grain_distill → 300 × efficiency   (typical base malt max ~380; 300 ≈ 75–80% yield)
+//   sugar              → 384                (sucrose dissolves fully; ~46 PPG metric)
+//   fruit              →  60                (typical fruit sugar content ~10–15 Brix)
+function calcWashOG(ings, comps, efficiency_pct, vol_l) {
+  const eff = Math.min(100, Math.max(0, parseFloat(efficiency_pct) || 75)) / 100;
+  const vol = parseFloat(vol_l) || 0;
+  if (!vol) return null;
+  let pts = 0;
+  for (const ing of ings) {
+    const comp = comps.find(c => c.id === ing.component_id);
+    if (!comp) continue;
+    const kg = (parseFloat(ing.qty) || 0) / 1000;
+    if (!kg) continue;
+    let ep = 0;
+    if (comp.type === 'malt' || comp.type === 'grain_distill') ep = 300 * eff;
+    else if (comp.type === 'sugar')  ep = 384;
+    else if (comp.type === 'fruit')  ep = 60 * eff;
+    pts += kg * ep;
+  }
+  return pts > 0 ? +(1 + pts / vol / 1000).toFixed(3) : null;
 }
 
 // ─── EBC → approximate hex colour ────────────────────────────────────────────
@@ -1756,7 +1814,16 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
               <div class="form-grid">
                 <div class="form-row-2">
                   ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
-                  ${formField('OG цель (SG)', `<input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.060">`)}
+                  ${formField('КПД затора (%)', `<input type="number" name="system_efficiency" class="form-control" value="${escHtml(data.system_efficiency||'75')}" step="1" min="40" max="100">`)}
+                </div>
+                <div class="form-group">
+                  <label class="form-label">OG цель (SG)</label>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.060" style="flex:1">
+                    <span id="wash-og-calc" style="font-size:11px;color:var(--text-muted);white-space:nowrap">≈ —</span>
+                    <button type="button" id="btn-apply-wash-og" class="btn btn-secondary" style="flex-shrink:0;padding:2px 8px;font-size:11px;height:28px">↑</button>
+                  </div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-top:2px">расчёт из засыпи × КПД × объём</div>
                 </div>
                 <div class="form-row-3">
                   ${formField('Вода затор (л)', `<input type="number" name="water_mash_l" class="form-control" value="${escHtml(data.water_mash_l||'')}" step="0.5">`)}
@@ -1847,6 +1914,7 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
     } else {
       // ── Sugar / Fruit wash — simple flat list ─────────────────────────────
       const washItems = ingredients.filter(i => i.stage_key === 'wash' || i.stage_key === 'mash');
+      const sugarOG = calcWashOG(washItems, components, 100, data.batch_size_l);
       container.innerHTML = `
         <div class="form-grid">
           <h4>Ингредиенты браги</h4>
@@ -1856,6 +1924,15 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
             ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
             ${formField('Температура брожения (°C)', `<input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'28')}" step="0.5">`)}
             ${formField('Дней брожения', `<input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'7')}" step="1">`)}
+          </div>
+          <div class="form-group">
+            <label class="form-label">OG цель (SG)</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.060" style="flex:1">
+              <span id="wash-og-calc" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${sugarOG ? `≈ ${sugarOG}` : '≈ —'}</span>
+              <button type="button" id="btn-apply-wash-og" class="btn btn-secondary" style="flex-shrink:0;padding:2px 8px;font-size:11px;height:28px">↑</button>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px">расчёт из ингредиентов × объём (сахар — 100%)</div>
           </div>
         </div>
       `;
