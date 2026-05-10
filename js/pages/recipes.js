@@ -333,7 +333,7 @@ function showRecipeEditor(recipe, pageContainer) {
       });
     }
 
-    // ── Live OG calculator for spirit braga tabs ───────────────────────────
+    // ── Live OG + FG + ABV + АС calculators for spirit braga tabs ────────
     function recalcWashOG() {
       const display = tabContent.querySelector('#wash-og-calc');
       if (!display) return;
@@ -346,6 +346,43 @@ function showRecipeEditor(recipe, pageContainer) {
       const og         = calcWashOG(ings, components, effVal, vol);
       display.textContent = og ? `≈ ${og}` : '≈ —';
       display.dataset.og  = og || '';
+      recalcBragaStats();
+    }
+
+    function autoFillFG() {
+      const ogVal = parseFloat(tabContent.querySelector('[name=og_target]')?.value || recipeData.og_target);
+      if (!ogVal) return;
+      // find yeast in either fermentation or wash stage
+      const yeastIng = recipeIngredients.find(i =>
+        ['fermentation','wash'].includes(i.stage_key) &&
+        components.find(c => c.id === i.component_id)?.type === 'yeast'
+      );
+      const att = parseFloat(components.find(c => c.id === yeastIng?.component_id)?.attenuation);
+      if (!att) return;
+      const fg = +(1 + (ogVal - 1) * (1 - att / 100)).toFixed(3);
+      const fgInput = tabContent.querySelector('[name=fg_target]');
+      if (fgInput && !fgInput.value) { fgInput.value = String(fg); recipeData.fg_target = String(fg); isDirty = true; }
+      const hint = tabContent.querySelector('#wash-fg-hint');
+      if (hint) hint.textContent = `≈ авто (${att}%)`;
+      recalcBragaStats();
+    }
+
+    function recalcBragaStats() {
+      const og  = parseFloat(tabContent.querySelector('[name=og_target]')?.value  || recipeData.og_target)  || 0;
+      const fg  = parseFloat(tabContent.querySelector('[name=fg_target]')?.value  || recipeData.fg_target)  || 0;
+      const vol = parseFloat(tabContent.querySelector('[name=batch_size_l]')?.value || recipeData.batch_size_l) || 0;
+      const abvEl = tabContent.querySelector('#wash-stat-abv');
+      const asEl  = tabContent.querySelector('#wash-stat-as');
+      if (!abvEl || !asEl) return;
+      if (og > 1 && fg > 0 && fg < og) {
+        const abv = +((og - fg) * 131.25).toFixed(1);
+        const as  = vol > 0 ? +(vol * abv / 100).toFixed(2) : null;
+        abvEl.textContent = `${abv}%`;
+        asEl.textContent  = as !== null ? `${as} л` : '—';
+      } else {
+        abvEl.textContent = '—';
+        asEl.textContent  = '—';
+      }
     }
 
     tabContent.querySelector('#btn-apply-wash-og')?.addEventListener('click', () => {
@@ -353,14 +390,30 @@ function showRecipeEditor(recipe, pageContainer) {
       if (!og) return;
       const ogInput = tabContent.querySelector('[name=og_target]');
       if (ogInput) { ogInput.value = og; recipeData.og_target = og; isDirty = true; }
+      autoFillFG();
+      recalcBragaStats();
+    });
+    tabContent.querySelector('[name=og_target]')?.addEventListener('input', () => {
+      recipeData.og_target = tabContent.querySelector('[name=og_target]').value;
+      autoFillFG();
+      recalcBragaStats();
+    });
+    tabContent.querySelector('[name=fg_target]')?.addEventListener('input', () => {
+      recipeData.fg_target = tabContent.querySelector('[name=fg_target]').value;
+      isDirty = true;
+      recalcBragaStats();
     });
     tabContent.querySelector('[name=system_efficiency]')?.addEventListener('input', () => {
       recipeData.system_efficiency = tabContent.querySelector('[name=system_efficiency]').value;
       isDirty = true;
       recalcWashOG();
     });
-    tabContent.querySelector('[name=batch_size_l]')?.addEventListener('input', recalcWashOG);
+    tabContent.querySelector('[name=batch_size_l]')?.addEventListener('input', () => {
+      recalcWashOG();
+      recalcBragaStats();
+    });
     recalcWashOG();
+    recalcBragaStats();
 
     // Remove ingredient — deferred: actual sheet deletion happens on Save
     tabContent.querySelectorAll('.btn-remove-ingredient').forEach(btn => {
@@ -434,6 +487,7 @@ function showRecipeEditor(recipe, pageContainer) {
         if (ing) {
           ing.component_id = sel.value;
           if (['boil','whirlpool'].includes(ing.stage_key)) recalcIBU();
+          if (['mash','wash'].includes(ing.stage_key)) { recalcWashOG?.(); autoFillFG?.(); }
         }
         isDirty = true;
       });
@@ -1812,18 +1866,36 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
             <div class="section-card-header"><h4>📐 Параметры</h4></div>
             <div class="section-card-body">
               <div class="form-grid">
+                <!-- Stat blocks: ABV браги + АС -->
+                <div class="overview-stats-row" style="margin-bottom:4px">
+                  <div class="recipe-stat-block">
+                    <div class="recipe-stat-value" id="wash-stat-abv">—</div>
+                    <div class="recipe-stat-label">ABV браги</div>
+                  </div>
+                  <div class="recipe-stat-block">
+                    <div class="recipe-stat-value" id="wash-stat-as">—</div>
+                    <div class="recipe-stat-label">АС (л)</div>
+                  </div>
+                </div>
                 <div class="form-row-2">
                   ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
                   ${formField('КПД затора (%)', `<input type="number" name="system_efficiency" class="form-control" value="${escHtml(data.system_efficiency||'75')}" step="1" min="40" max="100">`)}
                 </div>
                 <div class="form-group">
-                  <label class="form-label">OG цель (SG)</label>
+                  <label class="form-label">OG (SG)</label>
                   <div style="display:flex;gap:6px;align-items:center">
                     <input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.060" style="flex:1">
                     <span id="wash-og-calc" style="font-size:11px;color:var(--text-muted);white-space:nowrap">≈ —</span>
                     <button type="button" id="btn-apply-wash-og" class="btn btn-secondary" style="flex-shrink:0;padding:2px 8px;font-size:11px;height:28px">↑</button>
                   </div>
                   <div style="font-size:10px;color:var(--text-muted);margin-top:2px">расчёт из засыпи × КПД × объём</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">FG (SG)</label>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <input type="number" name="fg_target" class="form-control" value="${escHtml(data.fg_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.010" style="flex:1">
+                    <span id="wash-fg-hint" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${currentYeastComp?.attenuation ? `≈ авто (${currentYeastComp.attenuation}%)` : ''}</span>
+                  </div>
                 </div>
                 <div class="form-row-3">
                   ${formField('Вода затор (л)', `<input type="number" name="water_mash_l" class="form-control" value="${escHtml(data.water_mash_l||'')}" step="0.5">`)}
@@ -1915,24 +1987,46 @@ function renderSpiritTab(container, tab, data, ingredients, mashRests) {
       // ── Sugar / Fruit wash — simple flat list ─────────────────────────────
       const washItems = ingredients.filter(i => i.stage_key === 'wash' || i.stage_key === 'mash');
       const sugarOG = calcWashOG(washItems, components, 100, data.batch_size_l);
+      const sugarYeast = washItems.find(i => components.find(c=>c.id===i.component_id)?.type === 'yeast');
+      const sugarYeastComp = sugarYeast ? components.find(c=>c.id===sugarYeast.component_id) : null;
       container.innerHTML = `
         <div class="form-grid">
-          <h4>Ингредиенты браги</h4>
+          <!-- Stat blocks -->
+          <div class="overview-stats-row" style="margin-bottom:4px">
+            <div class="recipe-stat-block">
+              <div class="recipe-stat-value" id="wash-stat-abv">—</div>
+              <div class="recipe-stat-label">ABV браги</div>
+            </div>
+            <div class="recipe-stat-block">
+              <div class="recipe-stat-value" id="wash-stat-as">—</div>
+              <div class="recipe-stat-label">АС (л)</div>
+            </div>
+          </div>
+          <div class="form-row-2">
+            ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
+            <div class="form-row-2" style="gap:4px">
+              ${formField('Темп. брожения (°C)', `<input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'28')}" step="0.5">`)}
+              ${formField('Дней', `<input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'7')}" step="1">`)}
+            </div>
+          </div>
+          <h4 style="margin:4px 0 2px">Ингредиенты браги</h4>
           ${renderIngredientList(washItems, 'wash', ['grain_distill','sugar','fruit','additive','yeast','salt','other'])}
           <button type="button" class="btn btn-secondary btn-add-wash-ingredient">+ Добавить ингредиент</button>
-          <div class="form-row-3">
-            ${formField('Объём браги (л)', `<input type="number" name="batch_size_l" class="form-control" value="${escHtml(data.batch_size_l||'')}" step="1">`)}
-            ${formField('Температура брожения (°C)', `<input type="number" name="ferment_temp_c" class="form-control" value="${escHtml(data.ferment_temp_c||'28')}" step="0.5">`)}
-            ${formField('Дней брожения', `<input type="number" name="ferment_days" class="form-control" value="${escHtml(data.ferment_days||'7')}" step="1">`)}
-          </div>
           <div class="form-group">
-            <label class="form-label">OG цель (SG)</label>
+            <label class="form-label">OG (SG)</label>
             <div style="display:flex;gap:6px;align-items:center">
               <input type="number" name="og_target" class="form-control" value="${escHtml(data.og_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.060" style="flex:1">
               <span id="wash-og-calc" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${sugarOG ? `≈ ${sugarOG}` : '≈ —'}</span>
               <button type="button" id="btn-apply-wash-og" class="btn btn-secondary" style="flex-shrink:0;padding:2px 8px;font-size:11px;height:28px">↑</button>
             </div>
             <div style="font-size:10px;color:var(--text-muted);margin-top:2px">расчёт из ингредиентов × объём (сахар — 100%)</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">FG (SG)</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" name="fg_target" class="form-control" value="${escHtml(data.fg_target||'')}" step="0.001" min="1" max="1.2" placeholder="1.010" style="flex:1">
+              <span id="wash-fg-hint" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${sugarYeastComp?.attenuation ? `≈ авто (${sugarYeastComp.attenuation}%)` : ''}</span>
+            </div>
           </div>
         </div>
       `;
